@@ -17,6 +17,19 @@ AIOps platform: Observe → Analyze → Act. Integrates with existing monitoring
   - RAG over runbooks (markdown/git) and Jira tickets (pgvector) for knowledge-augmented RCA
 - **Act:** Alerting (Slack/PagerDuty/email) + Remediation (Agentic AI with MCP servers)
 
+## Use Cases
+
+1. **Intelligent Alert Triage** — Filter noise, deduplicate, correlate 100 alerts into 3 real incidents
+2. **Automated Root Cause Analysis** — RCA in seconds via RAG over runbooks, Jira, Confluence, codebase + live MCP queries
+3. **Self-Healing Infrastructure** — Auto-remediate known low-risk patterns (pod crash loops, cache full, connection pool exhaustion) via Kubernetes MCP
+4. **Knowledge Capture & Retention** — Continuously mine Confluence, Jira, GitHub, runbooks into pgvector; institutional knowledge survives team turnover
+5. **MTTR Reduction** — From ~75 min (manual) to <10 min (automated detect → analyze → remediate → verify)
+6. **Proactive Incident Prevention** — Prediction node spots trends (disk filling, latency creeping) and triggers remediation before outage
+7. **On-Call Engineer Augmentation** — Full context at 3 AM: root cause, similar past incidents, runbook steps, confidence score
+8. **Alert Fatigue Elimination** — Noise management + correlation reduces alert volume 60-80%; every alert that reaches a human is real and enriched
+9. **Cross-Service Incident Correlation** — Correlate metrics + logs across services via MCP; one unified incident instead of separate tickets per team
+10. **Compliance & Audit Trail** — Every MCP call logged (who, what, when, result); full trail from detection through remediation
+
 ## Build & Run
 
 ```bash

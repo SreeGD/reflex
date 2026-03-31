@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""AIOps Platform Demo — proof of value.
+"""Reflex Platform Demo — proof of value.
 
 Usage:
     python demo.py                                     # default scenario
@@ -41,7 +41,7 @@ def print_header():
     console.print()
     console.print(
         Panel(
-            "[bold white]AIOps Platform — Live Demo[/bold white]\n"
+            "[bold white]Reflex Platform — Live Demo[/bold white]\n"
             "[dim]Observe → Analyze → Act[/dim]",
             border_style="bright_blue",
             padding=(1, 4),
@@ -112,7 +112,7 @@ async def run_scenario(scenario_name: str, use_mock_llm: bool = False) -> None:
 
     print_before_story(scenario)
 
-    console.print("[bold green]━━━ AFTER (AIOps) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[/bold green]")
+    console.print("[bold green]━━━ AFTER (Reflex) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[/bold green]")
     console.print()
 
     providers = create_providers(mode="mock", scenario=scenario)
@@ -244,7 +244,7 @@ def list_scenarios():
 
 
 def main():
-    parser = argparse.ArgumentParser(description="AIOps Platform Demo")
+    parser = argparse.ArgumentParser(description="Reflex Platform Demo")
     parser.add_argument("--scenario", default="db_pool_exhaustion",
                         help="Scenario name or 'all'")
     parser.add_argument("--list", action="store_true", help="List available scenarios")

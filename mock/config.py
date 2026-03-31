@@ -1,6 +1,6 @@
 """ShopFast e-commerce platform — service definitions and dependency graph.
 
-This is the fictional distributed system being monitored by the AIOps platform.
+This is the fictional distributed system being monitored by Reflex.
 All mock data generators and scenarios reference these definitions.
 """
 

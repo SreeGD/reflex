@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-AIOps platform: Observe → Analyze → Act. Integrates with existing monitoring tools (Prometheus, ELK, OpenTelemetry) and adds AI-powered analysis and remediation.
+Reflex — Observe → Analyze → Act. Integrates with existing monitoring tools (Prometheus, ELK, OpenTelemetry) and adds AI-powered analysis and remediation.
 
 **Stack:** Python (FastAPI), React + TypeScript, PostgreSQL (TimescaleDB + pgvector), LangGraph, Celery + Redis
 

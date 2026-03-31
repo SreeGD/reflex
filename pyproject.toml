@@ -1,7 +1,7 @@
 [project]
-name = "aiops"
+name = "reflex-aiops"
 version = "0.1.0"
-description = "AIOps Platform — Observe, Analyze, Act"
+description = "Reflex — Observe, Analyze, Act"
 requires-python = ">=3.12"
 dependencies = [
     "langgraph>=0.4",

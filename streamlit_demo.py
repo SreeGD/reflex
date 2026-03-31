@@ -1,4 +1,4 @@
-"""AIOps Platform — Visual Demo (Streamlit).
+"""Reflex — Visual Demo (Streamlit).
 
 Run with: streamlit run streamlit_demo.py
 """
@@ -17,7 +17,7 @@ from mock.config import DEPENDENCY_GRAPH, SERVICES
 # Page config
 # ---------------------------------------------------------------------------
 st.set_page_config(
-    page_title="AIOps Platform Demo",
+    page_title="Reflex Platform Demo",
     page_icon="🔧",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -253,7 +253,7 @@ def main():
     # Sidebar
     with st.sidebar:
         st.image("https://img.icons8.com/fluency/96/maintenance.png", width=64)
-        st.title("AIOps Platform")
+        st.title("Reflex Platform")
         st.caption("Observe → Analyze → Act")
         st.divider()
 
@@ -320,13 +320,13 @@ def main():
                      f"{story.manual_steps} manual steps | Engineer woken up")
 
         with col_after:
-            st.markdown("### After (AIOps)")
+            st.markdown("### After (Reflex)")
 
             if not run_button and "pipeline_result" not in st.session_state:
                 st.info("Click **Run Demo** in the sidebar to see the AI in action")
             else:
                 if run_button:
-                    with st.spinner("Running AIOps pipeline..."):
+                    with st.spinner("Running Reflex pipeline..."):
                         stages, final_state, total_time, providers = run_async(
                             run_pipeline(scenario)
                         )
@@ -689,8 +689,8 @@ def _render_mttr_comparison(scenario, total_time, final_state):
         textposition="outside",
     ))
     fig.add_trace(go.Bar(
-        x=["After (AIOps)"], y=[max(total_time, 0.5)],
-        name="AIOps", marker_color="#40C057", text=[f"{max(total_time, 0.1):.1f} sec"],
+        x=["After (Reflex)"], y=[max(total_time, 0.5)],
+        name="Reflex", marker_color="#40C057", text=[f"{max(total_time, 0.1):.1f} sec"],
         textposition="outside",
     ))
     fig.update_layout(

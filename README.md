@@ -1,6 +1,6 @@
-# AIOps Platform
+# Reflex
 
-Intelligent operations platform that moves from manual ops to automated AIOps through three pillars: **Observe → Analyze → Act**.
+Intelligent operations platform that moves from manual ops to automated incident response through three pillars: **Observe → Analyze → Act**.
 
 ## Vision
 
@@ -20,7 +20,7 @@ The MVP demo runs end-to-end with mock data. No infrastructure, no API keys, no 
 ### Setup
 
 ```bash
-git clone https://github.com/SreeGD/aiops.git && cd aiops
+git clone https://github.com/SreeGD/reflex.git && cd reflex
 
 # Option A: using pip
 python -m venv .venv && source .venv/bin/activate
@@ -303,7 +303,7 @@ Batch ingestion (Confluence, Jira, GitHub → pgvector) uses direct API clients,
 ## Project Structure
 
 ```
-aiops/
+reflex/
 ├── demo.py                          # CLI demo entry point
 ├── streamlit_demo.py                # Visual demo (Streamlit)
 ├── pyproject.toml
@@ -365,7 +365,7 @@ Knowledge base: 8 runbooks with real kubectl/SQL commands, 15 Jira tickets with 
 
 ```mermaid
 gantt
-    title AIOps Incremental Roadmap
+    title Reflex Incremental Roadmap
     dateFormat YYYY-MM-DD
     axisFormat %b
 

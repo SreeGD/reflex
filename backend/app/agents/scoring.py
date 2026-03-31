@@ -6,6 +6,8 @@ historical success) plus LLM self-assessment. Objective signals dominate.
 
 from __future__ import annotations
 
+from typing import Optional
+
 from dataclasses import dataclass
 
 
@@ -13,7 +15,7 @@ from dataclasses import dataclass
 class ConfidenceSignals:
     rag_match_score: float  # best keyword/cosine score from knowledge search (0-1)
     pattern_match: bool  # exact match to known incident pattern?
-    recency_days: int | None  # days since similar incident resolved
+    recency_days: Optional[int]  # days since similar incident resolved
     historical_success_rate: float  # success rate of this remediation (0-1)
     llm_assessment: float  # LLM self-assessed confidence (0-1)
 

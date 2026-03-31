@@ -9,6 +9,8 @@ This is the most important node. It:
 
 from __future__ import annotations
 
+from typing import Optional
+
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from backend.app.agents.scoring import ConfidenceSignals, compute_confidence
@@ -166,7 +168,7 @@ async def rca_node(
     }
 
 
-def _extract_field(text: str, field: str) -> str | None:
+def _extract_field(text: str, field: str) -> Optional[str]:
     for line in text.split("\n"):
         if line.strip().upper().startswith(field.upper() + ":"):
             return line.split(":", 1)[1].strip()
@@ -183,7 +185,7 @@ def _extract_float(text: str, field: str, default: float = 0.7) -> float:
     return default
 
 
-def _days_since_resolution(ticket: dict) -> int | None:
+def _days_since_resolution(ticket: dict) -> Optional[int]:
     from datetime import datetime, timezone
 
     resolved = ticket.get("resolved")

@@ -8,26 +8,56 @@ Intelligent operations platform that moves from manual ops to automated AIOps th
 
 **Target state:** Alarms fire → AI analyzes with full context (runbooks, past incidents, correlated signals) → suggests or auto-executes remediation.
 
-## Quick Start — Demo
+## Quick Start — Run Locally
 
-The MVP demo runs end-to-end with mock data. No infrastructure, no API keys, no Docker.
+The MVP demo runs end-to-end with mock data. No infrastructure, no API keys, no Docker required.
+
+### Prerequisites
+
+- Python 3.9+
+- pip (or uv)
+
+### Setup
 
 ```bash
-# Setup
 git clone https://github.com/SreeGD/aiops.git && cd aiops
+
+# Option A: using pip
+python -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
+
+# Option B: using uv
 uv venv .venv && source .venv/bin/activate
 uv pip install -e ".[dev]"
+```
 
-# CLI demo
+### Run the CLI Demo
+
+```bash
 python demo.py --list                              # list 5 incident scenarios
-python demo.py --mock-llm                          # run with mock LLM (no API key)
-python demo.py                                     # run with real Claude (needs ANTHROPIC_API_KEY)
+python demo.py --mock-llm                          # run default scenario (no API key needed)
 python demo.py --scenario all --mock-llm           # run all 5 scenarios
+python demo.py --scenario payment_timeout_cascade --mock-llm  # run a specific scenario
+python demo.py                                     # run with real Claude (needs ANTHROPIC_API_KEY)
+```
 
-# Visual demo (Streamlit)
+To use a real LLM instead of mock responses:
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+python demo.py
+```
+
+### Run the Streamlit Visual Demo
+
+```bash
 pip install streamlit plotly
 streamlit run streamlit_demo.py
 ```
+
+Opens at http://localhost:8501 with three tabs:
+- **Pipeline Demo** — Select a scenario, run the full Observe → Analyze → Act pipeline with metrics charts
+- **RAG Explorer** — Free-text search over runbooks, Jira tickets, and Confluence docs
+- **Knowledge Base Browser** — Browse all indexed knowledge
 
 ### What the Demo Shows
 

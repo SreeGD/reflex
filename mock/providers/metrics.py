@@ -18,7 +18,7 @@ class MockMetricsProvider:
         self,
         metric: str,
         labels: dict[str, str],
-        time: str | None = None,
+        time: Optional[str] = None,
     ) -> dict:
         ts = _parse_time(time) if time else datetime.now(tz=timezone.utc).timestamp()
         samples = self._gen.query(metric, labels, ts)

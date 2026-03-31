@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Optional
+
 import json
 from datetime import datetime, timezone
 from pathlib import Path
@@ -10,7 +12,7 @@ from pathlib import Path
 class MockAlertsProvider:
     """Fulfills AlertsProvider protocol. Prints to terminal, logs to JSONL."""
 
-    def __init__(self, log_dir: Path | None = None) -> None:
+    def __init__(self, log_dir: Optional[Path] = None) -> None:
         self._log_dir = log_dir or Path(__file__).parent.parent / "data"
         self.sent_alerts: list[dict] = []
 

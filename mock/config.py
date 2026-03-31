@@ -6,6 +6,8 @@ All mock data generators and scenarios reference these definitions.
 
 from __future__ import annotations
 
+from typing import Optional
+
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -45,9 +47,9 @@ class ServiceDef:
     baseline_latency_p99_ms: tuple[float, float] = (120.0, 20.0)
     baseline_error_rate: tuple[float, float] = (0.001, 0.0005)
     # Resource-specific
-    db_pool_max: int | None = None
-    redis_pool_max: int | None = None
-    jvm_heap_max_mb: int | None = None
+    db_pool_max: Optional[int] = None
+    redis_pool_max: Optional[int] = None
+    jvm_heap_max_mb: Optional[int] = None
 
 
 SERVICES: dict[str, ServiceDef] = {

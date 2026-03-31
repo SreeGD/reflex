@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Optional
+
 import random
 import uuid
 
@@ -65,7 +67,7 @@ TRACE_TEMPLATES: dict[str, dict] = {
 class TraceGenerator:
     """Generate distributed traces across ShopFast services."""
 
-    def __init__(self, services: dict[str, ServiceDef] | None = None, seed: int = 42):
+    def __init__(self, services: Optional[dict[str, ServiceDef]] = None, seed: int = 42):
         self.services = services or SERVICES
         self.rng = random.Random(seed)
         self._anomaly_overrides: dict[str, dict] = {}
@@ -74,9 +76,9 @@ class TraceGenerator:
         self,
         service: str,
         operation: str,
-        duration_ms: float | None = None,
+        duration_ms: Optional[float] = None,
         status: str = "ERROR",
-        error_message: str | None = None,
+        error_message: Optional[str] = None,
     ) -> None:
         """Override a specific span to simulate an anomaly."""
         key = f"{service}:{operation}"
@@ -103,7 +105,7 @@ class TraceGenerator:
         self,
         node: dict,
         trace_id: str,
-        parent_span_id: str | None,
+        parent_span_id: Optional[str],
         current_time: float,
         spans: list[Span],
     ) -> float:

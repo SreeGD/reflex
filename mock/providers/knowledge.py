@@ -7,6 +7,8 @@ replaceable with PgVectorKnowledgeProvider post-funding.
 
 from __future__ import annotations
 
+from typing import Optional
+
 import json
 from pathlib import Path
 
@@ -16,7 +18,7 @@ _DATA_DIR = Path(__file__).parent.parent / "data"
 class MockKnowledgeProvider:
     """Fulfills KnowledgeProvider protocol using local files + keyword search."""
 
-    def __init__(self, data_dir: Path | None = None) -> None:
+    def __init__(self, data_dir: Optional[Path] = None) -> None:
         self._data_dir = data_dir or _DATA_DIR
         self._runbooks: dict[str, str] = {}
         self._tickets: list[dict] = []
@@ -48,7 +50,7 @@ class MockKnowledgeProvider:
     async def search_similar(
         self,
         query: str,
-        source_types: list[str] | None = None,
+        source_types: Optional[list[str]] = None,
         limit: int = 5,
     ) -> list[dict]:
         """Keyword-based search across all knowledge sources."""
@@ -106,10 +108,10 @@ class MockKnowledgeProvider:
         results.sort(key=lambda x: x["score"], reverse=True)
         return results[:limit]
 
-    async def get_runbook(self, runbook_id: str) -> str | None:
+    async def get_runbook(self, runbook_id: str) -> Optional[str]:
         return self._runbooks.get(runbook_id)
 
-    async def get_ticket(self, ticket_key: str) -> dict | None:
+    async def get_ticket(self, ticket_key: str) -> Optional[dict]:
         for t in self._tickets:
             if t["key"] == ticket_key:
                 return t

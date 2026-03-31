@@ -22,7 +22,7 @@ class MetricsProvider(Protocol):
         self,
         metric: str,
         labels: dict[str, str],
-        time: str | None = None,
+        time: Optional[str] = None,
     ) -> dict:
         """Instant query for a metric at a point in time."""
         ...
@@ -53,12 +53,12 @@ class LogsProvider(Protocol):
 
     async def search(
         self,
-        service: str | None = None,
-        level: str | None = None,
-        message_contains: str | None = None,
-        trace_id: str | None = None,
-        time_from: str | None = None,
-        time_to: str | None = None,
+        service: Optional[str] = None,
+        level: Optional[str] = None,
+        message_contains: Optional[str] = None,
+        trace_id: Optional[str] = None,
+        time_from: Optional[str] = None,
+        time_to: Optional[str] = None,
         limit: int = 20,
     ) -> list[dict]:
         """Search logs with optional filters."""
@@ -76,7 +76,7 @@ class KnowledgeProvider(Protocol):
     async def search_similar(
         self,
         query: str,
-        source_types: list[str] | None = None,
+        source_types: Optional[list[str]] = None,
         limit: int = 5,
     ) -> list[dict]:
         """Find knowledge chunks relevant to a query.
@@ -86,11 +86,11 @@ class KnowledgeProvider(Protocol):
         """
         ...
 
-    async def get_runbook(self, runbook_id: str) -> str | None:
+    async def get_runbook(self, runbook_id: str) -> Optional[str]:
         """Get full runbook content by ID (e.g. 'RB-001')."""
         ...
 
-    async def get_ticket(self, ticket_key: str) -> dict | None:
+    async def get_ticket(self, ticket_key: str) -> Optional[dict]:
         """Get a Jira ticket by key (e.g. 'OPS-1234')."""
         ...
 
@@ -116,7 +116,7 @@ class ActionsProvider(Protocol):
         ...
 
     async def get_pods(
-        self, namespace: str, label_selector: str | None = None
+        self, namespace: str, label_selector: Optional[str] = None
     ) -> list[dict]:
         """List pods with status."""
         ...

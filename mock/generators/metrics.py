@@ -21,7 +21,7 @@ class MetricsGenerator:
     - Per-service resource metrics (DB pool, Redis pool, JVM heap)
     """
 
-    def __init__(self, services: dict[str, ServiceDef] | None = None, seed: int = 42):
+    def __init__(self, services: Optional[dict[str, ServiceDef]] = None, seed: int = 42):
         self.services = services or SERVICES
         self.rng = random.Random(seed)
         self._anomalies: dict[str, AnomalyConfig] = {}
@@ -33,7 +33,7 @@ class MetricsGenerator:
         start_time: float,
         duration_seconds: float,
         magnitude: float = 3.0,
-        limit: float | None = None,
+        limit: Optional[float] = None,
     ) -> None:
         """Schedule an anomaly on a metric key (e.g., 'order-service:error_rate')."""
         self._anomalies[key] = AnomalyConfig(

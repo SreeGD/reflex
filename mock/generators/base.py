@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Optional
+
 from dataclasses import dataclass
 from enum import Enum
 
@@ -20,7 +22,7 @@ class AnomalyConfig:
     start_time: float  # unix epoch
     duration_seconds: float
     magnitude: float = 3.0  # multiplier for spike, target ratio for drift
-    limit: float | None = None  # hard limit for saturation (e.g., pool max)
+    limit: Optional[float] = None  # hard limit for saturation (e.g., pool max)
 
 
 @dataclass
@@ -37,26 +39,26 @@ class LogEntry:
     level: str  # DEBUG, INFO, WARN, ERROR
     service: str
     instance: str
-    trace_id: str | None
-    span_id: str | None
+    trace_id: Optional[str]
+    span_id: Optional[str]
     message: str
     logger: str
-    endpoint: str | None = None
-    method: str | None = None
-    status_code: int | None = None
-    duration_ms: float | None = None
-    extra: dict | None = None
+    endpoint: Optional[str] = None
+    method: Optional[str] = None
+    status_code: Optional[int] = None
+    duration_ms: Optional[float] = None
+    extra: Optional[dict] = None
 
 
 @dataclass
 class Span:
     trace_id: str
     span_id: str
-    parent_span_id: str | None
+    parent_span_id: Optional[str]
     operation_name: str
     service_name: str
     start_time: float  # unix epoch
     duration_ms: float
     status: str  # OK, ERROR
     attributes: dict
-    events: list[dict] | None = None
+    events: Optional[list[dict]] = None

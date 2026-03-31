@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Optional
+
 import random
 import uuid
 from datetime import datetime, timezone
@@ -88,7 +90,7 @@ LOG_TEMPLATES: dict[str, dict[str, list[tuple[str, str, str]]]] = {
 class LogGenerator:
     """Generate structured logs for ShopFast services."""
 
-    def __init__(self, services: dict[str, ServiceDef] | None = None, seed: int = 42):
+    def __init__(self, services: Optional[dict[str, ServiceDef]] = None, seed: int = 42):
         self.services = services or SERVICES
         self.rng = random.Random(seed)
         self._active_scenario: str = "normal"
@@ -151,11 +153,11 @@ class LogGenerator:
 
     def search(
         self,
-        service: str | None = None,
-        level: str | None = None,
-        message_contains: str | None = None,
-        time_from: float | None = None,
-        time_to: float | None = None,
+        service: Optional[str] = None,
+        level: Optional[str] = None,
+        message_contains: Optional[str] = None,
+        time_from: Optional[float] = None,
+        time_to: Optional[float] = None,
         limit: int = 20,
     ) -> list[LogEntry]:
         """Search logs across all or specific services."""

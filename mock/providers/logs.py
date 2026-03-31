@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Optional
+
 from dataclasses import asdict
 from datetime import datetime, timezone
 
@@ -16,12 +18,12 @@ class MockLogsProvider:
 
     async def search(
         self,
-        service: str | None = None,
-        level: str | None = None,
-        message_contains: str | None = None,
-        trace_id: str | None = None,
-        time_from: str | None = None,
-        time_to: str | None = None,
+        service: Optional[str] = None,
+        level: Optional[str] = None,
+        message_contains: Optional[str] = None,
+        trace_id: Optional[str] = None,
+        time_from: Optional[str] = None,
+        time_to: Optional[str] = None,
         limit: int = 20,
     ) -> list[dict]:
         start = _parse_time(time_from) if time_from else datetime.now(tz=timezone.utc).timestamp() - 600

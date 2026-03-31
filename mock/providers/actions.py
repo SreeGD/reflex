@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Optional
+
 import random
 from datetime import datetime, timezone
 
@@ -45,7 +47,7 @@ class MockActionsProvider:
         return action
 
     async def get_pods(
-        self, namespace: str, label_selector: str | None = None
+        self, namespace: str, label_selector: Optional[str] = None
     ) -> list[dict]:
         # Parse service name from label selector like "app=order-service"
         service = "unknown"

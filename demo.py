@@ -66,7 +66,7 @@ def print_before_story(scenario):
 
 
 def print_stage(stage: str, category: str, message: str, elapsed: float):
-    color = {"OBSERVE": "cyan", "ANALYZE": "yellow", "ACT": "green", "ALERT": "magenta"}.get(
+    color = {"OBSERVE": "cyan", "ANALYZE": "yellow", "REVIEW": "blue", "ACT": "green", "ALERT": "magenta"}.get(
         category, "white"
     )
     console.print(f"  [bold {color}]{category}[/bold {color}]  {stage:<42} [{elapsed:.1f}s]")
@@ -192,11 +192,22 @@ async def run_scenario(scenario_name: str, use_mock_llm: bool = False) -> None:
                 )
                 print_stage("Root Cause Analysis", "ANALYZE", rca_msg, elapsed * 0.6)
 
-            elif node_name == "action_router":
+            elif node_name == "review":
                 decision = node_state.get("action_decision", "")
                 action = node_state.get("action_taken", {})
                 blast = node_state.get("blast_radius", "")
-                confidence = final_state.get("confidence", 0)
+                adj_conf = node_state.get("adjusted_confidence", 0)
+                orig_conf = final_state.get("confidence", 0)
+                adjustments = node_state.get("review_adjustments", [])
+                risk = node_state.get("risk_assessment", {})
+                brief = node_state.get("decision_brief")
+
+                # Review adjustments
+                if adjustments:
+                    adj_msg = "Review adjustments:\n" + "\n".join(f"  {a}" for a in adjustments)
+                    print_stage("Review & Risk Assessment", "REVIEW", adj_msg, elapsed * 0.5)
+
+                # Decision
                 decision_display = {
                     "auto_execute": "AUTO-EXECUTE",
                     "human_approval": "HUMAN APPROVAL REQUIRED",
@@ -204,9 +215,31 @@ async def run_scenario(scenario_name: str, use_mock_llm: bool = False) -> None:
                 }.get(decision, decision.upper())
                 msg = (
                     f"Action: {action.get('action', '')}({action.get('deployment', '')})\n"
-                    f"Blast radius: {blast.upper()} | Confidence: {confidence:.2f}"
+                    f"Blast radius: {blast.upper()} "
                 )
-                print_stage(f"Decision: {decision_display}", "ACT", msg, elapsed)
+                if risk.get("base_blast_radius") != blast:
+                    msg += f"(upgraded from {risk.get('base_blast_radius', '?').upper()}) "
+                msg += f"| Confidence: {adj_conf:.2f}"
+                if abs(adj_conf - orig_conf) > 0.001:
+                    msg += f" (adjusted from {orig_conf:.2f})"
+                print_stage(f"Decision: {decision_display}", "ACT", msg, elapsed * 0.3)
+
+                # Decision brief (when human needed)
+                if brief:
+                    brief_msg = (
+                        f"BRIEF: {brief.get('summary', '')}\n"
+                        f"Risk if act: {brief.get('risk_if_act', '')}\n"
+                        f"Risk if wait: {brief.get('risk_if_wait', '')}"
+                    )
+                    contra = brief.get("evidence_against", [])
+                    if contra:
+                        brief_msg += f"\nContra-indicators: {'; '.join(contra[:3])}"
+                    alts = brief.get("alternatives", [])
+                    if alts:
+                        alt_names = [a.get("action", "") for a in alts]
+                        brief_msg += f"\nAlternatives: {', '.join(alt_names)}"
+                    brief_msg += f"\nRecommendation: {brief.get('recommendation', '')}"
+                    print_stage("Decision Brief for Human", "REVIEW", brief_msg, elapsed * 0.2)
 
             elif node_name == "remediation":
                 result = node_state.get("action_result")

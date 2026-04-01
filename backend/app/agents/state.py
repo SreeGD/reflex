@@ -29,9 +29,14 @@ class AgentState(TypedDict, total=False):
     evidence: List[str]
     suggested_actions: List[dict]
 
-    # Action routing
+    # Review Agent
     action_decision: str  # "auto_execute", "human_approval", "escalate"
-    blast_radius: str
+    blast_radius: str  # effective blast radius (after dynamic assessment)
+    adjusted_confidence: float  # confidence after review adjustments
+    risk_assessment: dict  # RiskAssessment serialized
+    decision_brief: dict | None  # DecisionBrief (only when human needed)
+    review_critique: dict | None  # RCA self-critique results
+    review_adjustments: list[str]  # human-readable log of what review changed
 
     # Remediation
     action_taken: Optional[dict]

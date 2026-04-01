@@ -642,20 +642,86 @@ def _render_pipeline_results(stages, final_state, total_time, scenario):
             col_c3.metric("Pattern Match", "Yes" if signals.get("pattern_match") else "No")
             col_c4.metric("Recency", f"{signals.get('recency_days', 'N/A')}d")
 
-        elif node_name == "action_router":
+        elif node_name == "review":
             decision = state.get("action_decision", "")
             action = state.get("action_taken", {})
             blast = state.get("blast_radius", "")
+            adj_conf = state.get("adjusted_confidence", 0)
+            adjustments = state.get("review_adjustments", [])
+            risk = state.get("risk_assessment", {})
+            brief = state.get("decision_brief")
+
+            # Review adjustments
+            if adjustments:
+                with st.expander("Review & Risk Assessment", expanded=True):
+                    for adj in adjustments:
+                        st.markdown(f"- {adj}")
+
+                    # Risk factors visualization
+                    risk_factors = risk.get("risk_factors", [])
+                    if risk_factors:
+                        rf_names = [rf["name"] for rf in risk_factors]
+                        rf_deltas = [rf["risk_delta"] for rf in risk_factors]
+                        rf_colors = ["#FF6B6B" if d > 0 else "#40C057" for d in rf_deltas]
+                        fig = go.Figure(go.Bar(
+                            x=rf_names, y=rf_deltas,
+                            marker_color=rf_colors,
+                            text=[f"{d:+.2f}" for d in rf_deltas],
+                            textposition="outside",
+                        ))
+                        fig.update_layout(
+                            height=200, margin=dict(l=10, r=10, t=10, b=10),
+                            yaxis_title="Risk Delta",
+                            plot_bgcolor="rgba(0,0,0,0)",
+                            paper_bgcolor="rgba(0,0,0,0)",
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+
+            # Decision
+            action_desc = f"`{action.get('action', '')}({action.get('deployment', '')})`"
+            blast_note = ""
+            if risk.get("base_blast_radius") != blast:
+                blast_note = f" (upgraded from {risk.get('base_blast_radius', '?')})"
+
             if decision == "auto_execute":
-                st.success(f"**ACT** — AUTO-EXECUTE: "
-                          f"`{action.get('action', '')}({action.get('deployment', '')})`"
-                          f" | Blast: {blast.upper()}")
+                st.success(f"**AUTO-EXECUTE:** {action_desc} | "
+                          f"Blast: {blast.upper()}{blast_note} | "
+                          f"Confidence: {adj_conf:.0%}")
             elif decision == "human_approval":
-                st.warning(f"**ACT** — HUMAN APPROVAL REQUIRED: "
-                          f"`{action.get('action', '')}({action.get('deployment', '')})`"
-                          f" | Blast: {blast.upper()}")
+                st.warning(f"**HUMAN APPROVAL REQUIRED:** {action_desc} | "
+                          f"Blast: {blast.upper()}{blast_note} | "
+                          f"Confidence: {adj_conf:.0%}")
             else:
-                st.error(f"**ACT** — ESCALATE to on-call")
+                st.error(f"**ESCALATE TO ON-CALL** | Blast: {blast.upper()}")
+
+            # Decision brief
+            if brief:
+                with st.expander("Decision Brief for Human Approver", expanded=True):
+                    st.markdown(f"**Summary:** {brief.get('summary', '')}")
+                    col_r1, col_r2 = st.columns(2)
+                    col_r1.error(f"**Risk if act:** {brief.get('risk_if_act', '')}")
+                    col_r2.warning(f"**Risk if wait:** {brief.get('risk_if_wait', '')}")
+
+                    evidence_for = brief.get("evidence_for", [])
+                    evidence_against = brief.get("evidence_against", [])
+                    col_e1, col_e2 = st.columns(2)
+                    with col_e1:
+                        st.markdown("**Evidence for:**")
+                        for e in evidence_for:
+                            st.markdown(f"- {e}")
+                    with col_e2:
+                        st.markdown("**Contra-indicators:**")
+                        for e in evidence_against:
+                            st.markdown(f"- {e}")
+
+                    st.markdown(f"**Recommendation:** {brief.get('recommendation', '')}")
+                    st.markdown(f"**Estimated TTR:** {brief.get('estimated_ttr_minutes', '?')} minutes")
+
+                    alts = brief.get("alternatives", [])
+                    if alts:
+                        st.markdown("**Alternatives:**")
+                        for a in alts:
+                            st.markdown(f"- `{a.get('action', '')}` — {a.get('reason', '')}")
 
         elif node_name == "remediation":
             result = state.get("action_result")

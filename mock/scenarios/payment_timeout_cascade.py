@@ -85,6 +85,13 @@ class PaymentTimeoutCascade(Scenario):
     def get_blast_radius(self) -> str:
         return "medium"
 
+    def get_context_overrides(self) -> dict:
+        return {
+            "recent_deploys": [
+                {"service": "payment-service", "minutes_ago": 45, "version": "v2.3.1"}
+            ],
+        }
+
     def configure_metrics(self, gen: MetricsGenerator) -> None:
         now = time.time()
         gen.inject_anomaly("payment-service:latency_p99", AnomalyType.SPIKE, now, 600, 100.0)

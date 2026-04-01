@@ -60,18 +60,73 @@ _RCA_RESPONSES = {
 }
 
 
+# Pre-built critique responses for the Review Agent (keyed by alert patterns)
+_CRITIQUE_RESPONSES = {
+    "PaymentGatewayTimeout": (
+        "CONFIDENCE_JUSTIFIED: no — 0.78 may be too high given external dependency uncertainty. "
+        "Scaling payment-service adds capacity but does not address the root cause if the external "
+        "gateway itself is completely down.\n"
+        "ALTERNATIVE_CAUSES: DNS resolution failure to payment provider, "
+        "network partition between payment-service and gateway, "
+        "TLS certificate expiration on gateway endpoint\n"
+        "MIGHT_BE_SYMPTOM: yes — the timeout is a symptom of external gateway degradation. "
+        "Scaling treats the symptom by absorbing more concurrent waiting requests, but if the "
+        "gateway is fully down, no amount of scaling helps.\n"
+        "ADJUSTED_CONFIDENCE: 0.72"
+    ),
+    "HighHeapUsage": (
+        "CONFIDENCE_JUSTIFIED: yes — matches OPS-1287 pattern closely, and heap drift + GC "
+        "pauses are consistent with a memory leak.\n"
+        "ALTERNATIVE_CAUSES: large response caching (similar to OPS-1245)\n"
+        "MIGHT_BE_SYMPTOM: no — the memory leak is the root cause. However, if a recent deploy "
+        "introduced the leak, rollback would be a better fix than restart (restart only buys time).\n"
+        "ADJUSTED_CONFIDENCE: 0.85"
+    ),
+    "RedisPoolExhausted": (
+        "CONFIDENCE_JUSTIFIED: yes — pattern matches OPS-1312 exactly. Redis pool at max with "
+        "timeout errors is a clear signal.\n"
+        "ALTERNATIVE_CAUSES: none\n"
+        "MIGHT_BE_SYMPTOM: no — connection pool exhaustion is the direct cause of failures.\n"
+        "ADJUSTED_CONFIDENCE: 0.90"
+    ),
+    "SlowQueryDetected": (
+        "CONFIDENCE_JUSTIFIED: yes — slow query logs and p99 spike on stock endpoint are "
+        "consistent with a missing index.\n"
+        "ALTERNATIVE_CAUSES: table bloat requiring VACUUM, lock contention from concurrent writes\n"
+        "MIGHT_BE_SYMPTOM: yes — restart will clear the query plan cache and resolve symptoms "
+        "for approximately 2 hours, but the slow queries will return. The root cause is a missing "
+        "index on the products.sku column. Root fix requires CREATE INDEX CONCURRENTLY.\n"
+        "ADJUSTED_CONFIDENCE: 0.82"
+    ),
+}
+
+
 class MockLLM:
     """Drop-in replacement for ChatAnthropic that returns pre-built responses."""
 
     async def ainvoke(self, messages: list[BaseMessage], **kwargs) -> AIMessage:
-        # Extract alert context from messages
         full_text = " ".join(m.content for m in messages if hasattr(m, "content"))
 
+        # Dispatch: critique prompts vs RCA prompts
+        is_critique = "critically evaluate" in full_text.lower() or "confidence_justified" in full_text.lower()
+
+        if is_critique:
+            for pattern, response in _CRITIQUE_RESPONSES.items():
+                if pattern.lower() in full_text.lower():
+                    return AIMessage(content=response)
+            # Fallback critique: everything looks fine
+            return AIMessage(content=(
+                "CONFIDENCE_JUSTIFIED: yes — evidence supports the assessment.\n"
+                "ALTERNATIVE_CAUSES: none\n"
+                "MIGHT_BE_SYMPTOM: no\n"
+                "ADJUSTED_CONFIDENCE: 0.85"
+            ))
+
+        # RCA prompts
         for alert_pattern, response in _RCA_RESPONSES.items():
             if alert_pattern.lower() in full_text.lower():
                 return AIMessage(content=response)
 
-        # Fallback generic response
         return AIMessage(content=(
             "ROOT_CAUSE: Service degradation detected. Unable to determine specific root cause "
             "from available context. Manual investigation recommended.\n"

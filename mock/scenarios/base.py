@@ -98,6 +98,14 @@ class Scenario(ABC):
         """Expected remediation action."""
         ...
 
+    def get_context_overrides(self) -> dict:
+        """Override environment context for risk assessment.
+
+        Default: empty (calm environment). Override in scenarios to
+        demonstrate dynamic risk factors (recent deploys, change freeze, etc).
+        """
+        return {}
+
     @abstractmethod
     def get_blast_radius(self) -> str:
         """'low', 'medium', or 'high'."""

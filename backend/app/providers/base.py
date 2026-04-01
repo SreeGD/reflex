@@ -145,3 +145,23 @@ class AlertsProvider(Protocol):
     async def escalate(self, incident: dict, reason: str) -> dict:
         """Escalate via PagerDuty."""
         ...
+
+
+@runtime_checkable
+class ContextProvider(Protocol):
+    """Provides environmental context for dynamic risk assessment.
+
+    Mock: returns scenario-configured context.
+    Real: queries Kubernetes, incident DB, deploy tracker, service catalog.
+    """
+
+    async def get_environment_context(self, service: str) -> dict:
+        """Returns context dict with keys:
+        - current_hour_utc: int
+        - is_change_freeze: bool
+        - recent_deploys: list[dict] (service, minutes_ago)
+        - active_incident_count: int
+        - recent_action_history: list[dict] (action, service, status)
+        - service_tier: int (1-3)
+        """
+        ...

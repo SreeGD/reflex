@@ -84,6 +84,13 @@ class MemoryLeak(Scenario):
     def get_blast_radius(self) -> str:
         return "low"
 
+    def get_context_overrides(self) -> dict:
+        return {
+            "recent_deploys": [
+                {"service": "payment-service", "minutes_ago": 90, "version": "v2.3.0"}
+            ],
+        }
+
     def configure_metrics(self, gen: MetricsGenerator) -> None:
         now = time.time()
         gen.inject_anomaly("payment-service:jvm_heap", AnomalyType.DRIFT, now, 900, 1.7)

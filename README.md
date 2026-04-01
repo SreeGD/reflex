@@ -89,7 +89,8 @@ After: <10 sec, fully automated, engineer sleeps.
 graph LR
     A[Alarm Webhook] --> B[OBSERVE]
     B --> C[ANALYZE]
-    C --> D[ACT]
+    C --> R[REVIEW]
+    R --> D[ACT]
 
     subgraph OBSERVE
         B1[Prometheus] --> B
@@ -98,16 +99,20 @@ graph LR
     end
 
     subgraph ANALYZE
-        C1[Noise Filter] --> C2[Correlation]
-        C2 --> C3[RCA + RAG]
-        C3 --> C4[Confidence Score]
+        C1[Noise Filter] --> C2[RCA + RAG]
+        C2 --> C3[Confidence Score]
+    end
+
+    subgraph REVIEW
+        R1[Runbook Validation] --> R2[Dynamic Risk<br/>6 factors]
+        R2 --> R3[Self-Critique<br/>LLM optional]
+        R3 --> R4{Decision}
     end
 
     subgraph ACT
-        D1{Confidence<br/>× Blast Radius}
-        D1 -->|High + Low| D2[Auto-Execute]
-        D1 -->|Medium| D3[Human Approval]
-        D1 -->|Low + High| D4[Escalate]
+        R4 -->|High conf + Low blast| D2[Auto-Execute]
+        R4 -->|Medium risk| D3[Human Approval<br/>with Decision Brief]
+        R4 -->|High risk / Low conf| D4[Escalate]
     end
 
     D2 --> E[Kubernetes MCP]
@@ -145,6 +150,7 @@ graph LR
     subgraph Pipeline Nodes
         N1[RCA Node]
         N2[Noise Node]
+        N5[Review Node]
         N3[Remediation Node]
         N4[Alert Node]
     end
@@ -155,10 +161,12 @@ graph LR
         P3[KnowledgeProvider]
         P4[ActionsProvider]
         P5[AlertsProvider]
+        P6[ContextProvider]
     end
 
     N1 --> P1 & P2 & P3
     N2 --> P3
+    N5 --> P6
     N3 --> P4
     N4 --> P5
 
@@ -168,6 +176,7 @@ graph LR
         M3[MockKnowledge<br/><i>Keyword search</i>]
         M4[MockActions<br/><i>Log + simulate</i>]
         M5[MockAlerts<br/><i>Terminal output</i>]
+        M6[MockContext<br/><i>Scenario config</i>]
     end
 
     subgraph "Production (Post-Funding)"
@@ -176,6 +185,7 @@ graph LR
         R3[pgvector + MCP]
         R4[Kubernetes MCP]
         R5[Slack + PagerDuty MCP]
+        R6[K8s + Incident DB]
     end
 
     P1 -.-> M1
@@ -183,26 +193,30 @@ graph LR
     P3 -.-> M3
     P4 -.-> M4
     P5 -.-> M5
+    P6 -.-> M6
 
     P1 -.-> R1
     P2 -.-> R2
     P3 -.-> R3
     P4 -.-> R4
     P5 -.-> R5
+    P6 -.-> R6
 
     style M1 fill:#69DB7C,color:#000
     style M2 fill:#69DB7C,color:#000
     style M3 fill:#69DB7C,color:#000
     style M4 fill:#69DB7C,color:#000
     style M5 fill:#69DB7C,color:#000
+    style M6 fill:#69DB7C,color:#000
     style R1 fill:#4DABF7,color:#fff
     style R2 fill:#4DABF7,color:#fff
     style R3 fill:#4DABF7,color:#fff
     style R4 fill:#4DABF7,color:#fff
     style R5 fill:#4DABF7,color:#fff
+    style R6 fill:#4DABF7,color:#fff
 ```
 
-5 providers: `MetricsProvider`, `LogsProvider`, `KnowledgeProvider`, `ActionsProvider`, `AlertsProvider`. Each independently replaceable — pipeline code never changes.
+6 providers: `MetricsProvider`, `LogsProvider`, `KnowledgeProvider`, `ActionsProvider`, `AlertsProvider`, `ContextProvider`. Each independently replaceable — pipeline code never changes.
 
 ### LangGraph Pipeline
 
@@ -211,10 +225,16 @@ graph TD
     A[Intake<br/><i>Parse alarm, assign ID</i>] --> B[Noise Check<br/><i>Known issue? Maintenance?</i>]
     B -->|Not noise| C[RCA<br/><i>LLM + RAG over knowledge base</i>]
     B -->|Noise detected| G[Alert<br/><i>FYI notification</i>]
-    C --> D[Action Router<br/><i>Confidence × Blast Radius</i>]
-    D -->|Auto-execute| E[Remediation<br/><i>ActionsProvider</i>]
-    D -->|Human approval| F[Approval Request<br/><i>AlertsProvider</i>]
-    D -->|Escalate| H[Escalation<br/><i>PagerDuty</i>]
+    C --> R[Review Agent<br/><i>Validate + Risk + Critique</i>]
+
+    R --> R1[Step 1: Runbook Validation<br/><i>Does action match runbook?</i>]
+    R1 --> R2[Step 2: Dynamic Risk<br/><i>6 factors: tier, time, deploy...</i>]
+    R2 --> R3[Step 3: Self-Critique<br/><i>LLM reviews RCA - optional</i>]
+    R3 --> R4{Step 4: Decision}
+
+    R4 -->|conf ≥ 0.90 + low blast| E[Remediation<br/><i>Auto-execute</i>]
+    R4 -->|medium risk| F[Human Approval<br/><i>+ Decision Brief</i>]
+    R4 -->|high risk / low conf| H[Escalation<br/><i>PagerDuty</i>]
     E --> G
     F --> G
     H --> G
@@ -222,9 +242,13 @@ graph TD
     style A fill:#4DABF7,color:#fff
     style B fill:#FFA94D,color:#fff
     style C fill:#FFA94D,color:#fff
-    style D fill:#FFA94D,color:#fff
+    style R fill:#339AF0,color:#fff
+    style R1 fill:#339AF0,color:#fff
+    style R2 fill:#339AF0,color:#fff
+    style R3 fill:#339AF0,color:#fff
+    style R4 fill:#339AF0,color:#fff
     style E fill:#40C057,color:#fff
-    style F fill:#40C057,color:#fff
+    style F fill:#FFA94D,color:#fff
     style H fill:#FF6B6B,color:#fff
     style G fill:#BE4BDB,color:#fff
 ```
@@ -259,9 +283,73 @@ graph TD
     style H fill:#40C057,color:#fff
 ```
 
+### Review Agent
+
+The Review Agent sits between RCA and Remediation. It validates the recommended action, assesses dynamic risk, optionally critiques the RCA, and generates a Decision Brief when humans need to approve.
+
+```mermaid
+graph TD
+    subgraph "Review Agent — 5 Steps"
+        S1["Step 1: Runbook Validation
+        Does the action match the runbook?
+        Mismatch → -0.05 confidence"]
+
+        S2["Step 2: Dynamic Risk Assessment
+        6 factors evaluated:
+        • Service tier (Tier 1 = +0.05)
+        • Time of day (peak = +0.05)
+        • Recent deploy (<2h = +0.08)
+        • Change freeze (= force escalate)
+        • Active incidents (≥3 = +0.05)
+        • Failed retry (= +0.15)"]
+
+        S3["Step 3: RCA Self-Critique (LLM)
+        Only when confidence 0.70–0.93
+        • Is confidence justified?
+        • Alternative root causes?
+        • Symptom vs root cause?"]
+
+        S4{"Step 4: Decision
+        Uses adjusted confidence
+        + effective blast radius"}
+
+        S5["Step 5: Decision Brief
+        Summary, risks, evidence,
+        contra-indicators, alternatives,
+        recommendation, estimated TTR"]
+
+        S1 --> S2 --> S3 --> S4
+        S4 -->|human needed| S5
+    end
+
+    style S1 fill:#339AF0,color:#fff
+    style S2 fill:#339AF0,color:#fff
+    style S3 fill:#BE4BDB,color:#fff
+    style S4 fill:#339AF0,color:#fff
+    style S5 fill:#FFA94D,color:#fff
+```
+
+**Dynamic risk can upgrade blast radius** (low → medium → high) but never downgrade:
+- Tier 1 service with any positive risk → at least "medium"
+- Total risk delta > 0.10 → upgrade one level
+- Change freeze → force "high" (escalation)
+
+**Decision Brief** gives humans everything to decide fast:
+
+| Field | Purpose |
+|-------|---------|
+| Summary | One-line: what happened + proposed action |
+| Risk if act | What could go wrong if we execute |
+| Risk if wait | What gets worse if we don't |
+| Evidence for | Runbook, past incidents supporting action |
+| Contra-indicators | Risk factors, critique findings, mismatches |
+| Recommendation | Approve/deny with reasoning |
+| Estimated TTR | From historical ticket resolution times |
+| Alternatives | Rollback, investigate further, etc. |
+
 ### Multi-Signal Confidence Scoring
 
-Routing decisions use a composite score (not just LLM self-assessment):
+The RCA node produces a composite confidence score from 4 signals (not just LLM self-assessment). The Review Agent may then adjust it further based on critique and risk factors.
 
 | Signal | Weight | Source |
 |--------|--------|--------|
@@ -270,7 +358,18 @@ Routing decisions use a composite score (not just LLM self-assessment):
 | LLM assessment | 20% | LLM self-assessed confidence |
 | Recency | 20% | Days since similar incident was resolved |
 
-Decision matrix: confidence >= 0.90 + low blast radius → auto-execute. Everything else → human approval or escalation.
+Decision matrix (after review adjustments):
+
+```mermaid
+quadrantChart
+    title Confidence × Blast Radius Decision Matrix
+    x-axis Low Blast Radius --> High Blast Radius
+    y-axis Low Confidence --> High Confidence
+    quadrant-1 Human Approval
+    quadrant-2 Auto-Execute
+    quadrant-3 Human Approval
+    quadrant-4 Escalate
+```
 
 ### MCP Integration (Production)
 
@@ -310,17 +409,32 @@ reflex/
 ├── backend/
 │   └── app/
 │       ├── providers/               # Abstract interfaces (the replaceable seam)
-│       │   ├── base.py              # 5 Protocol definitions
+│       │   ├── base.py              # 6 Protocol definitions
 │       │   └── factory.py           # create_providers(mode="mock"|"production")
 │       └── agents/
 │           ├── state.py             # LangGraph AgentState
 │           ├── graph.py             # StateGraph wiring
 │           ├── scoring.py           # Multi-signal confidence scoring
-│           └── nodes/               # Pipeline nodes (intake, noise, rca, etc.)
+│           ├── risk.py              # Dynamic risk assessment (6 factors)
+│           ├── models.py            # RiskFactor, RiskAssessment, DecisionBrief
+│           └── nodes/
+│               ├── intake.py        # Parse alarm, assign incident ID
+│               ├── noise.py         # Filter known issues
+│               ├── rca.py           # LLM + RAG root cause analysis
+│               ├── review.py        # Review Agent (validate, risk, critique, decide)
+│               ├── remediation.py   # Execute via ActionsProvider
+│               └── alert.py         # Notify via AlertsProvider
 ├── mock/
 │   ├── config.py                    # ShopFast service definitions (7 microservices)
 │   ├── generators/                  # Metrics, logs, trace generators
-│   ├── providers/                   # Mock implementations of all 5 providers
+│   ├── providers/                   # Mock implementations of all 6 providers
+│   │   ├── metrics.py               # MockMetricsProvider (generators)
+│   │   ├── logs.py                  # MockLogsProvider (templates)
+│   │   ├── knowledge.py             # MockKnowledgeProvider (keyword search)
+│   │   ├── actions.py               # MockActionsProvider (log + simulate)
+│   │   ├── alerts.py                # MockAlertsProvider (terminal + file)
+│   │   ├── context.py               # MockContextProvider (scenario config)
+│   │   └── mock_llm.py              # MockLLM (pre-built RCA + critique responses)
 │   ├── scenarios/                   # 5 incident scenarios
 │   └── data/
 │       ├── runbooks/                # 8 markdown runbooks

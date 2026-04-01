@@ -34,9 +34,9 @@ class AgentState(TypedDict, total=False):
     blast_radius: str  # effective blast radius (after dynamic assessment)
     adjusted_confidence: float  # confidence after review adjustments
     risk_assessment: dict  # RiskAssessment serialized
-    decision_brief: dict | None  # DecisionBrief (only when human needed)
-    review_critique: dict | None  # RCA self-critique results
-    review_adjustments: list[str]  # human-readable log of what review changed
+    decision_brief: Optional[dict]  # DecisionBrief (only when human needed)
+    review_critique: Optional[dict]  # RCA self-critique results
+    review_adjustments: List[str]  # human-readable log of what review changed
 
     # Remediation
     action_taken: Optional[dict]

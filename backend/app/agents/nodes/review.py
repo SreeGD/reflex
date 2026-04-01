@@ -12,6 +12,8 @@ Sits between RCA and Remediation. Replaces the simple action_router.
 
 from __future__ import annotations
 
+from typing import Optional
+
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from backend.app.agents.models import DecisionBrief, RiskAssessment
@@ -52,7 +54,7 @@ async def review_node(
     actions = state.get("suggested_actions", [])
     action = actions[0] if actions else {"action": "unknown", "deployment": service}
 
-    adjustments: list[str] = []
+    adjustments: List[str] = []
 
     # ── Step 1: Runbook Validation ──
     runbook_content = state.get("matching_runbook")
@@ -143,7 +145,7 @@ async def review_node(
 
 
 def _validate_against_runbook(
-    action: dict, runbook_content: str | None
+    action: dict, runbook_content: Optional[str]
 ) -> tuple[bool, str]:
     """Check if the suggested action matches the runbook's remediation section."""
     if not runbook_content:
@@ -178,7 +180,7 @@ def _validate_against_runbook(
     return False, f"Runbook does not mention '{action_type}' in remediation section"
 
 
-async def _run_critique(state: AgentState, action: dict, llm: object) -> dict | None:
+async def _run_critique(state: AgentState, action: dict, llm: object) -> Optional[dict]:
     """Run LLM self-critique on the RCA."""
     root_cause = state.get("root_cause", "")
     confidence = state.get("confidence", 0)
@@ -226,7 +228,7 @@ def _build_decision_brief(
     state: AgentState,
     action: dict,
     risk: RiskAssessment,
-    critique: dict | None,
+    critique: Optional[dict],
     adjusted_confidence: float,
 ) -> DecisionBrief:
     service = state.get("service", "unknown")
@@ -253,7 +255,7 @@ def _build_decision_brief(
     evidence_for = list(state.get("evidence", []))
 
     # Evidence against (contra-indicators)
-    evidence_against: list[str] = []
+    evidence_against: List[str] = []
     for rf in risk.risk_factors:
         if rf.risk_delta > 0:
             evidence_against.append(rf.explanation)
@@ -276,7 +278,7 @@ def _build_decision_brief(
     estimated_ttr = _estimate_ttr(tickets)
 
     # Alternatives
-    alternatives: list[dict] = []
+    alternatives: List[dict] = []
     recent_deploys = [rf for rf in risk.risk_factors if rf.name == "recent_deploy"]
     if recent_deploys:
         alternatives.append({
@@ -303,7 +305,7 @@ def _build_decision_brief(
     )
 
 
-def _estimate_ttr(tickets: list[dict]) -> int:
+def _estimate_ttr(tickets: List[dict]) -> int:
     """Estimate TTR from historical ticket resolution times."""
     if not tickets:
         return 15  # default
@@ -341,7 +343,7 @@ def _extract_float(text: str, field: str, default: float = 0.7) -> float:
     return default
 
 
-def _extract_list(text: str, field: str) -> list[str]:
+def _extract_list(text: str, field: str) -> List[str]:
     val = _extract_field(text, field)
     if not val or val.lower() == "none":
         return []

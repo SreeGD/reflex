@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Optional
+
 from datetime import datetime, timezone
 
 from backend.app.agents.risk import SERVICE_TIERS
@@ -15,7 +17,7 @@ class MockContextProvider:
     dynamic risk factors in the review agent.
     """
 
-    def __init__(self, overrides: dict | None = None) -> None:
+    def __init__(self, overrides: Optional[dict] = None) -> None:
         self._overrides = overrides or {}
 
     async def get_environment_context(self, service: str) -> dict:

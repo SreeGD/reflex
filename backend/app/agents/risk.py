@@ -6,9 +6,11 @@ Risk factors can upgrade blast (low→medium→high) but never downgrade.
 
 from __future__ import annotations
 
+from typing import List, Dict
+
 from .models import RiskAssessment, RiskFactor
 
-SERVICE_TIERS: dict[str, int] = {
+SERVICE_TIERS: Dict[str, int] = {
     "payment-service": 1,
     "order-service": 1,
     "api-gateway": 1,
@@ -18,7 +20,7 @@ SERVICE_TIERS: dict[str, int] = {
     "notification-service": 3,
 }
 
-BLAST_RADIUS_MAP: dict[str, str] = {
+BLAST_RADIUS_MAP: Dict[str, str] = {
     "restart_deployment": "low",
     "clear_cache": "low",
     "flush_queue": "low",
@@ -37,14 +39,14 @@ def assess_risk(
     service: str,
     context: dict,
     confidence: float,
-    matching_tickets: list[dict],
+    matching_tickets: List[dict],
 ) -> RiskAssessment:
     """Assess dynamic risk and compute effective blast radius."""
     action_type = action.get("action", "unknown")
     base_blast = BLAST_RADIUS_MAP.get(action_type, "high")
     tier = context.get("service_tier", SERVICE_TIERS.get(service, 3))
 
-    factors: list[RiskFactor] = []
+    factors: List[RiskFactor] = []
 
     # Factor 1: Service tier
     if tier == 1:

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import List
+
 from dataclasses import dataclass, field, asdict
 
 
@@ -20,7 +22,7 @@ class RiskFactor:
 class RiskAssessment:
     base_blast_radius: str  # from static config
     effective_blast_radius: str  # after dynamic factors (may be upgraded)
-    risk_factors: list[RiskFactor]
+    risk_factors: List[RiskFactor]
     total_risk_adjustment: float
     service_tier: int  # 1-3
 
@@ -39,11 +41,11 @@ class DecisionBrief:
     summary: str  # one-line: what happened + proposed action
     risk_if_act: str  # what could go wrong if we execute
     risk_if_wait: str  # what could go wrong if we don't
-    evidence_for: list[str]  # supports this action
-    evidence_against: list[str]  # contra-indicators
+    evidence_for: List[str]  # supports this action
+    evidence_against: List[str]  # contra-indicators
     recommendation: str  # "approve" or "deny" with reasoning
     estimated_ttr_minutes: int  # from historical tickets
-    alternatives: list[dict] = field(default_factory=list)  # fallback actions
+    alternatives: List[dict] = field(default_factory=list)  # fallback actions
 
     def to_dict(self) -> dict:
         return asdict(self)

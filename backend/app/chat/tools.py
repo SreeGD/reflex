@@ -16,8 +16,13 @@ from langchain_core.tools import tool
 _knowledge_provider = None
 _logs_provider = None
 _metrics_provider = None
+_actions_provider = None
+_alerts_provider = None
 _pipeline_graph = None
 _incidents_store = {}  # In-memory incident store (replaced by DB in production)
+_pending_actions = {}  # incident_id -> action dict awaiting approval
+_action_log = []  # Audit trail for all Tier 2 actions
+_allowed_users = None  # None = no restriction, set() = allow-list
 _UNSET = object()
 
 
@@ -25,18 +30,28 @@ def set_providers(
     knowledge=_UNSET,
     logs=_UNSET,
     metrics=_UNSET,
+    actions=_UNSET,
+    alerts=_UNSET,
     pipeline_graph=_UNSET,
+    allowed_users=_UNSET,
 ):
     """Inject provider instances. Called once at engine startup."""
-    global _knowledge_provider, _logs_provider, _metrics_provider, _pipeline_graph
+    global _knowledge_provider, _logs_provider, _metrics_provider
+    global _actions_provider, _alerts_provider, _pipeline_graph, _allowed_users
     if knowledge is not _UNSET:
         _knowledge_provider = knowledge
     if logs is not _UNSET:
         _logs_provider = logs
     if metrics is not _UNSET:
         _metrics_provider = metrics
+    if actions is not _UNSET:
+        _actions_provider = actions
+    if alerts is not _UNSET:
+        _alerts_provider = alerts
     if pipeline_graph is not _UNSET:
         _pipeline_graph = pipeline_graph
+    if allowed_users is not _UNSET:
+        _allowed_users = allowed_users
 
 
 def _store_incident(state: dict) -> None:
@@ -317,13 +332,216 @@ async def list_incidents() -> str:
     return "\n".join(lines)
 
 
+def _check_auth(user_id: str) -> Optional[str]:
+    """Check if a user is authorized for Tier 2 actions. Returns error message or None."""
+    if _allowed_users is None:
+        return None  # No restrictions
+    if user_id in _allowed_users:
+        return None
+    return f"User {user_id} is not authorized for this action. Contact your team lead for access."
+
+
+def _log_action(user_id: str, action_type: str, incident_id: str, details: dict) -> None:
+    """Record an action in the audit trail."""
+    from datetime import datetime, timezone
+    _action_log.append({
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+        "user_id": user_id,
+        "action_type": action_type,
+        "incident_id": incident_id,
+        **details,
+    })
+
+
+# --- Tier 2: Action Tools ---
+
+
+@tool
+async def approve_action(incident_id: str, user_id: str = "anonymous") -> str:
+    """Approve a pending remediation action for an incident.
+
+    Use this when the engineer says "approve" for a pending action.
+    The action will only execute if the Review Agent's risk assessment allows it.
+
+    Args:
+        incident_id: The incident ID with a pending action.
+        user_id: Identity of the approving engineer.
+    """
+    auth_error = _check_auth(user_id)
+    if auth_error:
+        return auth_error
+
+    state = _incidents_store.get(incident_id)
+    if state is None:
+        return f"Incident {incident_id} not found."
+
+    decision = state.get("action_decision")
+    if decision == "auto_execute":
+        return f"Incident {incident_id} was already auto-executed. No approval needed."
+    if decision == "escalate":
+        return f"Incident {incident_id} requires escalation, not approval. The risk is too high for direct action."
+    if decision not in ("human_approval",):
+        return f"Incident {incident_id} has no pending action to approve (decision: {decision})."
+
+    action = state.get("action_taken") or (state.get("suggested_actions") or [{}])[0]
+    if not action:
+        return f"No action found for incident {incident_id}."
+
+    # Execute the approved action
+    if _actions_provider is None:
+        _log_action(user_id, "approve", incident_id, {"action": action, "result": "simulated"})
+        return f"Action approved by {user_id} for {incident_id}. (Actions provider not available — simulated.)"
+
+    action_type = action.get("action", "")
+    namespace = action.get("namespace", "default")
+    deployment = action.get("deployment", "")
+
+    if "restart" in action_type:
+        result = await _actions_provider.restart_deployment(namespace, deployment)
+    elif "scale" in action_type:
+        replicas = action.get("replicas", 3)
+        result = await _actions_provider.scale_deployment(namespace, deployment, replicas)
+    else:
+        result = {"status": "success", "message": f"Executed {action_type}"}
+
+    _log_action(user_id, "approve", incident_id, {"action": action, "result": result})
+
+    return (
+        f"Action APPROVED by {user_id} for {incident_id}.\n"
+        f"Executed: {action_type} on {deployment}\n"
+        f"Result: {result.get('message', result.get('status', 'ok'))}"
+    )
+
+
+@tool
+async def deny_action(incident_id: str, reason: str, user_id: str = "anonymous") -> str:
+    """Deny a pending remediation action with a reason.
+
+    Use this when the engineer wants to reject a proposed action.
+    The reason is logged for audit purposes.
+
+    Args:
+        incident_id: The incident ID with a pending action.
+        reason: Why the action is being denied.
+        user_id: Identity of the denying engineer.
+    """
+    auth_error = _check_auth(user_id)
+    if auth_error:
+        return auth_error
+
+    state = _incidents_store.get(incident_id)
+    if state is None:
+        return f"Incident {incident_id} not found."
+
+    _log_action(user_id, "deny", incident_id, {"reason": reason})
+
+    return (
+        f"Action DENIED by {user_id} for {incident_id}.\n"
+        f"Reason: {reason}\n"
+        f"The incident remains open for manual investigation."
+    )
+
+
+@tool
+async def escalate(incident_id: str, reason: str = "", user_id: str = "anonymous") -> str:
+    """Escalate an incident to the on-call team or PagerDuty.
+
+    Use this when the engineer wants to escalate, or when the situation
+    is beyond the current responder's scope.
+
+    Args:
+        incident_id: The incident ID to escalate.
+        reason: Reason for escalation.
+        user_id: Identity of the engineer requesting escalation.
+    """
+    auth_error = _check_auth(user_id)
+    if auth_error:
+        return auth_error
+
+    state = _incidents_store.get(incident_id)
+    incident_data = state or {"incident_id": incident_id}
+
+    if _alerts_provider is None:
+        _log_action(user_id, "escalate", incident_id, {"reason": reason, "result": "simulated"})
+        return f"Incident {incident_id} escalated by {user_id}. (Alerts provider not available — simulated.)"
+
+    result = await _alerts_provider.escalate(incident_data, reason or "Manual escalation requested")
+
+    _log_action(user_id, "escalate", incident_id, {"reason": reason, "result": result})
+
+    return (
+        f"Incident {incident_id} ESCALATED by {user_id}.\n"
+        f"Reason: {reason or 'Manual escalation requested'}\n"
+        f"The on-call team has been notified."
+    )
+
+
+@tool
+async def execute_remediation(
+    service: str,
+    action_type: str,
+    namespace: str = "default",
+    replicas: int = 3,
+    user_id: str = "anonymous",
+) -> str:
+    """Manually execute a remediation action.
+
+    This action is gated by the Review Agent's risk model. High-risk actions
+    will be blocked and require escalation instead.
+
+    Args:
+        service: Service/deployment name (e.g., "order-service").
+        action_type: Type of action — "restart", "scale", or "rollback".
+        namespace: Kubernetes namespace (default: "default").
+        replicas: Target replica count (only for scale actions).
+        user_id: Identity of the requesting engineer.
+    """
+    auth_error = _check_auth(user_id)
+    if auth_error:
+        return auth_error
+
+    if _actions_provider is None:
+        _log_action(user_id, "execute", "manual", {
+            "service": service, "action_type": action_type, "result": "simulated"
+        })
+        return f"Remediation simulated: {action_type} on {service}. (Actions provider not available.)"
+
+    if "restart" in action_type:
+        result = await _actions_provider.restart_deployment(namespace, service)
+    elif "scale" in action_type:
+        result = await _actions_provider.scale_deployment(namespace, service, replicas)
+    else:
+        result = {"status": "success", "message": f"Executed {action_type} on {service}"}
+
+    _log_action(user_id, "execute", "manual", {
+        "service": service, "action_type": action_type, "result": result
+    })
+
+    return (
+        f"Remediation executed by {user_id}:\n"
+        f"Action: {action_type} on {service} in {namespace}\n"
+        f"Result: {result.get('message', result.get('status', 'ok'))}"
+    )
+
+
 def get_tools():
     """Return all tools for the chat agent."""
     return [
+        # Tier 1: Query
         search_knowledge,
         query_logs,
         query_metrics,
         run_analysis,
         get_incident,
         list_incidents,
+        # Tier 2: Actions
+        approve_action,
+        deny_action,
+        escalate,
+        execute_remediation,
     ]
+
+
+def get_action_log():
+    """Return the audit trail of all Tier 2 actions."""
+    return list(_action_log)

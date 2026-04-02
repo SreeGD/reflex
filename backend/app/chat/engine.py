@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional
 
 from langgraph.prebuilt import create_react_agent
 
+from backend.app.chat.logging import ConversationLogger
 from backend.app.chat.prompts import compose_prompt, get_default_context
 from backend.app.chat.response import ChatResponse
 from backend.app.chat.tools import get_tools, set_providers
@@ -25,15 +26,22 @@ class ChatEngine:
         knowledge_provider: Any = None,
         logs_provider: Any = None,
         metrics_provider: Any = None,
+        actions_provider: Any = None,
+        alerts_provider: Any = None,
         pipeline_graph: Any = None,
         checkpointer: Any = None,
         system_prompt: Optional[str] = None,
+        logger: Optional[ConversationLogger] = None,
     ) -> None:
+        self._logger = logger
+
         # Inject providers into the tools module
         set_providers(
             knowledge=knowledge_provider,
             logs=logs_provider,
             metrics=metrics_provider,
+            actions=actions_provider,
+            alerts=alerts_provider,
             pipeline_graph=pipeline_graph,
         )
 
@@ -69,23 +77,54 @@ class ChatEngine:
         Returns:
             ChatResponse with the agent's reply.
         """
+        if self._logger:
+            self._logger.log_inbound(session_id, user_id, message)
+
         config = {"configurable": {"thread_id": session_id}}
+        error_msg = None
 
-        result = await self._agent.ainvoke(
-            {"messages": [("user", message)]},
-            config=config,
-        )
+        try:
+            result = await self._agent.ainvoke(
+                {"messages": [("user", message)]},
+                config=config,
+            )
+        except Exception as e:
+            error_msg = str(e)
+            if self._logger:
+                self._logger.log_outbound(
+                    session_id, user_id, "", error=error_msg,
+                )
+            return ChatResponse(
+                text=f"An error occurred: {error_msg}",
+                conversation_id=session_id,
+                severity="critical",
+            )
 
-        # Extract the final AI message from the result
+        # Extract the final AI message and tool calls from the result
         messages = result.get("messages", [])
         ai_text = ""
-        for msg in reversed(messages):
-            if hasattr(msg, "type") and msg.type == "ai" and msg.content:
-                ai_text = msg.content
-                break
+        tool_calls_log = []
+        for msg in messages:
+            if hasattr(msg, "type") and msg.type == "ai":
+                if msg.content:
+                    ai_text = msg.content
+                if hasattr(msg, "tool_calls") and msg.tool_calls:
+                    for tc in msg.tool_calls:
+                        tool_calls_log.append({
+                            "name": tc.get("name", ""),
+                            "args": {k: str(v)[:100] for k, v in tc.get("args", {}).items()},
+                        })
+
+        response_text = ai_text or "I wasn't able to generate a response."
+
+        if self._logger:
+            self._logger.log_outbound(
+                session_id, user_id, response_text,
+                tool_calls=tool_calls_log,
+            )
 
         return ChatResponse(
-            text=ai_text or "I wasn't able to generate a response.",
+            text=response_text,
             conversation_id=session_id,
         )
 
@@ -121,6 +160,8 @@ def create_chat_engine(
     knowledge_provider: Any = None,
     logs_provider: Any = None,
     metrics_provider: Any = None,
+    actions_provider: Any = None,
+    alerts_provider: Any = None,
     scenario_name: Optional[str] = None,
     checkpointer: Any = None,
     system_prompt: Optional[str] = None,
@@ -132,6 +173,8 @@ def create_chat_engine(
         knowledge_provider: A KnowledgeProvider instance. Uses mock if None.
         logs_provider: A LogsProvider instance. Uses mock if None.
         metrics_provider: A MetricsProvider instance. Uses mock if None.
+        actions_provider: An ActionsProvider instance. Uses mock if None.
+        alerts_provider: An AlertsProvider instance. Uses mock if None.
         scenario_name: Mock scenario to load for pipeline + providers. Defaults to db_pool_exhaustion.
         checkpointer: LangGraph checkpointer for state persistence. Uses MemorySaver if None.
         system_prompt: Override the layered prompt system with a custom prompt.
@@ -145,33 +188,31 @@ def create_chat_engine(
     llm = llm_provider.get_model("chat")
 
     # Build mock providers if not provided
-    if knowledge_provider is None or logs_provider is None or metrics_provider is None:
-        from backend.app.providers.factory import create_providers
-        import importlib
+    from backend.app.providers.factory import create_providers
+    import importlib
 
-        scenario_name = scenario_name or "db_pool_exhaustion"
-        mod = importlib.import_module(f"mock.scenarios.{scenario_name}")
-        scenario = mod.create_scenario()
-        mock_providers = create_providers(mode="mock", scenario=scenario)
+    scenario_name = scenario_name or "db_pool_exhaustion"
+    mod = importlib.import_module(f"mock.scenarios.{scenario_name}")
+    scenario = mod.create_scenario()
+    mock_providers = create_providers(mode="mock", scenario=scenario)
 
-        if knowledge_provider is None:
-            knowledge_provider = mock_providers.knowledge
-        if logs_provider is None:
-            logs_provider = mock_providers.logs
-        if metrics_provider is None:
-            metrics_provider = mock_providers.metrics
+    if knowledge_provider is None:
+        knowledge_provider = mock_providers.knowledge
+    if logs_provider is None:
+        logs_provider = mock_providers.logs
+    if metrics_provider is None:
+        metrics_provider = mock_providers.metrics
+    if actions_provider is None:
+        actions_provider = mock_providers.actions
+    if alerts_provider is None:
+        alerts_provider = mock_providers.alerts
 
     # Build pipeline graph for run_analysis tool
     pipeline_graph = None
     try:
         from backend.app.agents.graph import build_graph
         pipeline_llm = llm_provider.get_model("rca")
-        import importlib
-        scenario_name = scenario_name or "db_pool_exhaustion"
-        mod = importlib.import_module(f"mock.scenarios.{scenario_name}")
-        scenario = mod.create_scenario()
-        pipeline_providers = create_providers(mode="mock", scenario=scenario)
-        pipeline_graph = build_graph(pipeline_providers, pipeline_llm)
+        pipeline_graph = build_graph(mock_providers, pipeline_llm)
     except Exception:
         pass  # Pipeline not available — run_analysis tool will report this
 
@@ -179,12 +220,20 @@ def create_chat_engine(
     if checkpointer is None:
         checkpointer = MemorySaver()
 
+    # Create conversation logger
+    import os
+    log_path = os.environ.get("CHAT_LOG_PATH", "logs/chat.jsonl")
+    logger = ConversationLogger(log_path=log_path)
+
     return ChatEngine(
         llm=llm,
         knowledge_provider=knowledge_provider,
         logs_provider=logs_provider,
         metrics_provider=metrics_provider,
+        actions_provider=actions_provider,
+        alerts_provider=alerts_provider,
         pipeline_graph=pipeline_graph,
         checkpointer=checkpointer,
         system_prompt=system_prompt,
+        logger=logger,
     )

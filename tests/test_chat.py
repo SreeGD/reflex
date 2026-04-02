@@ -71,7 +71,7 @@ class TestSearchKnowledgeTool:
 
     async def test_tool_in_registry(self):
         tools = get_tools()
-        assert len(tools) == 6
+        assert len(tools) == 10
         tool_names = {t.name for t in tools}
         assert "search_knowledge" in tool_names
         assert "query_logs" in tool_names

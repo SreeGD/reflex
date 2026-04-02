@@ -130,9 +130,9 @@ class TestExecuteRemediation:
 
 
 class TestToolRegistry:
-    def test_all_10_tools(self):
+    def test_all_12_tools(self):
         tools = get_tools()
-        assert len(tools) == 10
+        assert len(tools) == 12
         names = {t.name for t in tools}
         assert "approve_action" in names
         assert "deny_action" in names

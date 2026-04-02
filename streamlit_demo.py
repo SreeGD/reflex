@@ -306,9 +306,10 @@ def main():
                 f"**Blast Radius:** `{scenario.get_blast_radius()}`")
 
     # Tabs
-    tab_demo, tab_live, tab_rag, tab_knowledge = st.tabs([
+    tab_demo, tab_live, tab_arch, tab_rag, tab_knowledge = st.tabs([
         "Pipeline Demo",
         "Live Incidents",
+        "Architecture",
         "RAG Explorer",
         "Knowledge Base",
     ])
@@ -496,7 +497,121 @@ def main():
             if st.button("🔄 Refresh"):
                 st.rerun()
 
-    # ---- TAB 3: RAG Explorer ----
+    # ---- TAB 3: Architecture ----
+    with tab_arch:
+        st.markdown("#### Service Topology")
+
+        try:
+            _topo_resp = urlopen("http://localhost:8000/topology", timeout=5)
+            _topo = json.loads(_topo_resp.read())
+        except Exception:
+            _topo = None
+
+        if _topo is None:
+            st.warning("Topology API not available. Is the API server running?")
+        else:
+            # Render topology as Plotly graph (enhanced from original)
+            _topo_nodes = _topo.get("nodes", [])
+            _topo_edges = _topo.get("edges", [])
+
+            positions = {
+                "api-gateway": (2, 4),
+                "catalog-service": (0, 2.5),
+                "cart-service": (1, 2.5),
+                "order-service": (3, 2.5),
+                "payment-service": (4, 1),
+                "inventory-service": (1.5, 1),
+                "notification-service": (3.5, 1),
+            }
+
+            health_colors = {"healthy": "#40C057", "degraded": "#FFA94D", "down": "#FF6B6B"}
+            affected_service = scenario.get_affected_service()
+
+            import plotly.graph_objects as go_arch
+            edge_x, edge_y = [], []
+            for e in _topo_edges:
+                if e["source"] in positions and e["target"] in positions:
+                    sx, sy = positions[e["source"]]
+                    tx, ty = positions[e["target"]]
+                    edge_x.extend([sx, tx, None])
+                    edge_y.extend([sy, ty, None])
+
+            fig_arch = go_arch.Figure()
+            fig_arch.add_trace(go_arch.Scatter(
+                x=edge_x, y=edge_y, mode="lines",
+                line=dict(width=1.5, color="#555"), hoverinfo="none",
+            ))
+
+            node_x, node_y, node_text, node_colors, node_hover = [], [], [], [], []
+            for n in _topo_nodes:
+                name = n["name"]
+                if name not in positions:
+                    continue
+                x, y = positions[name]
+                node_x.append(x)
+                node_y.append(y)
+                tier_label = {1: "T1", 2: "T2", 3: "T3"}.get(n.get("tier", 3), "?")
+                node_text.append(f"{n.get('display_name', name)}\n[{tier_label}]")
+                color = "#FF4B4B" if name == affected_service else health_colors.get(n.get("health", "healthy"), "#4B8BFF")
+                node_colors.append(color)
+                deps = ", ".join(n.get("downstream", [])) or "none"
+                callers = ", ".join(n.get("upstream", [])) or "entry point"
+                node_hover.append(f"{name}<br>Tier: {tier_label}<br>Calls: {deps}<br>Called by: {callers}")
+
+            fig_arch.add_trace(go_arch.Scatter(
+                x=node_x, y=node_y, mode="markers+text",
+                marker=dict(size=40, color=node_colors, line=dict(width=2, color="white")),
+                text=node_text, textposition="bottom center", textfont=dict(size=10),
+                hovertext=node_hover, hoverinfo="text",
+            ))
+            fig_arch.update_layout(
+                showlegend=False, margin=dict(l=10, r=10, t=10, b=10),
+                height=350, xaxis=dict(visible=False), yaxis=dict(visible=False),
+                plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+            )
+            st.plotly_chart(fig_arch, use_container_width=True)
+
+            # What-if impact analysis
+            st.markdown("#### Impact Analysis")
+            col_svc, col_act = st.columns(2)
+            _services = [n["name"] for n in _topo_nodes]
+            _selected_svc = col_svc.selectbox("Service", _services, index=_services.index(affected_service) if affected_service in _services else 0)
+            _selected_act = col_act.selectbox("Action", ["restart_deployment", "scale_deployment", "rollback_deploy"])
+
+            if st.button("Analyze Impact"):
+                try:
+                    _impact_resp = urlopen(f"http://localhost:8000/topology/{_selected_svc}/blast-radius?action={_selected_act}", timeout=5)
+                    _impact = json.loads(_impact_resp.read())
+
+                    blast_color = {"low": "green", "medium": "orange", "high": "red"}.get(_impact.get("propagated_blast_radius", ""), "gray")
+                    st.markdown(f"**Propagated Blast Radius:** :{blast_color}[{_impact.get('propagated_blast_radius', '?').upper()}] (base: {_impact.get('base_blast_radius', '?')})")
+
+                    ic1, ic2, ic3 = st.columns(3)
+                    ic1.metric("Tier", _impact.get("tier", "?"))
+                    ic2.metric("Services Affected", _impact.get("total_affected_services", 0))
+                    ic3.metric("Journeys Affected", len(_impact.get("affected_journeys", [])))
+
+                    if _impact.get("upstream_services"):
+                        st.markdown(f"**Upstream:** {', '.join(_impact['upstream_services'])}")
+                    if _impact.get("downstream_services"):
+                        st.markdown(f"**Downstream:** {', '.join(_impact['downstream_services'])}")
+                    if _impact.get("affected_journeys"):
+                        st.markdown(f"**User Journeys:** {', '.join(_impact['affected_journeys'])}")
+                    if _impact.get("reasons"):
+                        for _r in _impact["reasons"]:
+                            st.warning(_r)
+                except Exception as _e:
+                    st.error(f"Impact analysis failed: {_e}")
+
+            # Service catalog
+            st.markdown("#### Service Catalog")
+            try:
+                _cat_resp = urlopen("http://localhost:8000/topology/docs/catalog", timeout=5)
+                st.markdown(_cat_resp.read().decode())
+            except Exception:
+                st.info("Service catalog not available")
+
+    # ---- TAB 4: RAG Explorer ----
     with tab_rag:
         _render_rag_explorer(scenario)
 

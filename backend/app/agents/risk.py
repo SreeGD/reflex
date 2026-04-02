@@ -130,6 +130,29 @@ def assess_risk(
             explanation=f"{action_type} was attempted on {service} recently and failed — retrying may not help",
         ))
 
+    # Factor 7: Cascade impact (topology-aware)
+    try:
+        from backend.app.topology.discovery import get_topology
+        topo = get_topology()
+        upstream = topo.get_all_upstream(service)
+        upstream_t1 = [s for s in upstream if SERVICE_TIERS.get(s, 3) == 1]
+        if upstream_t1:
+            factors.append(RiskFactor(
+                name="cascade_impact",
+                value=f"{len(upstream_t1)} upstream Tier-1 services",
+                risk_delta=0.07,
+                explanation=f"Action on {service} cascades to Tier-1: {', '.join(upstream_t1)}",
+            ))
+        elif len(upstream) >= 3:
+            factors.append(RiskFactor(
+                name="cascade_impact",
+                value=f"{len(upstream)} upstream services",
+                risk_delta=0.04,
+                explanation=f"Action on {service} affects {len(upstream)} upstream services",
+            ))
+    except Exception:
+        pass  # Topology not available — skip cascade check
+
     # Compute effective blast radius
     total_delta = sum(f.risk_delta for f in factors)
     effective_blast = base_blast

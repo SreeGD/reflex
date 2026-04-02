@@ -17,6 +17,7 @@ app = FastAPI(
 )
 
 from backend.app.api.chat import router as chat_router
+from backend.app.api.topology import router as topology_router
 from backend.app.api.webhook import router as webhook_router
 
 app.add_middleware(
@@ -28,6 +29,7 @@ app.add_middleware(
 )
 
 app.include_router(chat_router)
+app.include_router(topology_router)
 app.include_router(webhook_router)
 
 # Available demo scenarios

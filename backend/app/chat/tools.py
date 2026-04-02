@@ -525,6 +525,106 @@ async def execute_remediation(
     )
 
 
+# --- Topology Tools ---
+
+
+@tool
+async def show_topology(service: Optional[str] = None) -> str:
+    """Show the service topology — all services and their dependencies.
+
+    Use this when the user asks about service dependencies, what calls what,
+    upstream/downstream services, or the architecture.
+
+    Args:
+        service: Optional service name to focus on. If omitted, shows full topology.
+    """
+    try:
+        from backend.app.topology.discovery import get_topology
+        graph = get_topology()
+    except Exception:
+        return "Topology service not available."
+
+    if service:
+        info = graph.get_service(service)
+        if info is None:
+            return f"Service {service} not found in topology."
+        lines = [
+            f"Service: {info['name']}",
+            f"  Display Name: {info.get('display_name', '?')}",
+            f"  Tier: {info.get('tier', '?')}",
+            f"  Language: {info.get('language', '?')}",
+            f"  Health: {info.get('health', '?')}",
+            f"  Calls (downstream): {', '.join(info.get('downstream', [])) or 'none'}",
+            f"  Called by (upstream): {', '.join(info.get('upstream', [])) or 'none (entry point)'}",
+        ]
+        # Add transitive dependencies
+        all_up = graph.get_all_upstream(service)
+        all_down = graph.get_all_downstream(service)
+        if all_up:
+            lines.append(f"  All upstream (transitive): {', '.join(all_up)}")
+        if all_down:
+            lines.append(f"  All downstream (transitive): {', '.join(all_down)}")
+        return "\n".join(lines)
+
+    # Full topology
+    data = graph.to_dict()
+    lines = [f"Service Topology ({len(data['nodes'])} services, {len(data['edges'])} dependencies):", ""]
+    for node in data["nodes"]:
+        tier_label = {1: "T1", 2: "T2", 3: "T3"}.get(node.get("tier", 3), "?")
+        deps = ", ".join(node.get("downstream", [])) or "none"
+        lines.append(f"  [{tier_label}] {node['name']} → {deps}")
+    return "\n".join(lines)
+
+
+@tool
+async def analyze_impact(service: str, action: str = "restart_deployment") -> str:
+    """Analyze the blast radius and cascade impact of an action on a service.
+
+    Use this when the user asks about blast radius, impact of restarting/scaling,
+    which services will be affected, or which user journeys are impacted.
+
+    Args:
+        service: Service to analyze impact for.
+        action: Action type (restart_deployment, scale_deployment, rollback_deploy).
+    """
+    try:
+        from backend.app.topology.discovery import get_topology
+        from backend.app.topology.impact import calculate_blast_radius, get_affected_journeys
+        graph = get_topology()
+    except Exception:
+        return "Topology service not available."
+
+    if graph.get_service(service) is None:
+        return f"Service {service} not found in topology."
+
+    result = calculate_blast_radius(graph, service, action)
+    journeys = get_affected_journeys(graph, service)
+
+    lines = [
+        f"Impact Analysis: {action} on {service}",
+        f"  Base blast radius: {result['base_blast_radius']}",
+        f"  Propagated blast radius: {result['propagated_blast_radius']}",
+        f"  Service tier: {result['tier']}",
+        f"  Upstream services affected: {', '.join(result['upstream_services']) or 'none'}",
+        f"  Downstream dependencies: {', '.join(result['downstream_services']) or 'none'}",
+        f"  Total services in blast radius: {result['total_affected_services']}",
+    ]
+
+    if result["upstream_tier1"]:
+        lines.append(f"  Upstream Tier-1 at risk: {', '.join(result['upstream_tier1'])}")
+
+    if journeys:
+        lines.append(f"  User journeys affected: {', '.join(j['journey'] for j in journeys)}")
+
+    if result["reasons"]:
+        lines.append("")
+        lines.append("  Escalation reasons:")
+        for r in result["reasons"]:
+            lines.append(f"    - {r}")
+
+    return "\n".join(lines)
+
+
 def get_tools():
     """Return all tools for the chat agent."""
     return [
@@ -540,6 +640,9 @@ def get_tools():
         deny_action,
         escalate,
         execute_remediation,
+        # Topology
+        show_topology,
+        analyze_impact,
     ]
 
 

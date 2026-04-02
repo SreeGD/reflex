@@ -128,14 +128,8 @@ for msg in st.session_state.messages:
             with st.expander("Structured Data"):
                 st.json(structured)
 
-# Chat input
-if prompt := st.chat_input("Ask Reflex about an incident..."):
-    # Add user message
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.markdown(prompt)
-
-    # Get response
+def _send_and_display(prompt: str):
+    """Send a message to the chat engine and display the response."""
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
             try:
@@ -174,6 +168,23 @@ if prompt := st.chat_input("Ask Reflex about an incident..."):
                     "content": f"Error: {e}",
                     "severity": "critical",
                 })
+
+
+# Check for pending message (from sidebar buttons) — last message is user with no response
+_has_pending = (
+    st.session_state.messages
+    and st.session_state.messages[-1]["role"] == "user"
+)
+
+if _has_pending:
+    _send_and_display(st.session_state.messages[-1]["content"])
+
+# Chat input
+if prompt := st.chat_input("Ask Reflex about an incident..."):
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
+    _send_and_display(prompt)
 
 # Sidebar
 with st.sidebar:

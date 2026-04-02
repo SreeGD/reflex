@@ -185,6 +185,28 @@ with st.sidebar:
         st.rerun()
 
     st.divider()
+    st.header("Active Incidents")
+    try:
+        _inc_resp = urlopen(f"{BASE_URL}/incidents", timeout=3)
+        _incidents = json.loads(_inc_resp.read())
+    except Exception:
+        _incidents = []
+
+    if _incidents:
+        for _inc in _incidents[:5]:
+            _iid = _inc.get("incident_id", "?")
+            _svc = _inc.get("service", "?")
+            _sev = {"critical": "🔴", "warning": "🟡"}.get(_inc.get("severity", ""), "⚪")
+            if st.button(f"{_sev} {_iid}: {_svc}", key=f"inc_{_iid}"):
+                st.session_state.messages.append({
+                    "role": "user",
+                    "content": f"Tell me about incident {_iid}",
+                })
+                st.rerun()
+    else:
+        st.caption("No incidents yet")
+
+    st.divider()
     st.header("Quick Actions")
     quick_actions = [
         "What runbooks exist for database pool issues?",

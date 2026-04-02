@@ -10,9 +10,9 @@ import pytest
 
 from backend.app.chat.logging import ConversationLogger, TimedToolTracker
 from backend.app.chat.response import Action, ChatResponse
+from backend.app.incidents import incident_store
 from backend.app.chat.tools import (
     _action_log,
-    _incidents_store,
     approve_action,
     deny_action,
     escalate,
@@ -34,25 +34,25 @@ from mock.providers.alerts import MockAlertsProvider
 @pytest.fixture(autouse=True)
 def reset_tools():
     """Reset tool state between tests."""
-    _incidents_store.clear()
+    incident_store.clear()
     _action_log.clear()
     actions = MockActionsProvider()
     alerts = MockAlertsProvider(log_dir=Path(tempfile.mkdtemp()))
     set_providers(actions=actions, alerts=alerts, allowed_users=None)
     yield
     set_providers(actions=None, alerts=None, allowed_users=None)
-    _incidents_store.clear()
+    incident_store.clear()
     _action_log.clear()
 
 
 class TestApproveAction:
     async def test_approve_pending_action(self):
-        _incidents_store["INC-001"] = {
+        incident_store.put("INC-001", {
             "incident_id": "INC-001",
             "service": "order-service",
             "action_decision": "human_approval",
             "suggested_actions": [{"action": "restart_deployment", "deployment": "order-service", "namespace": "prod"}],
-        }
+        })
         result = await approve_action.ainvoke({"incident_id": "INC-001", "user_id": "alice"})
         assert "APPROVED" in result
         assert "alice" in result
@@ -60,10 +60,10 @@ class TestApproveAction:
         assert _action_log[0]["action_type"] == "approve"
 
     async def test_approve_already_executed(self):
-        _incidents_store["INC-002"] = {
+        incident_store.put("INC-002", {
             "incident_id": "INC-002",
             "action_decision": "auto_execute",
-        }
+        })
         result = await approve_action.ainvoke({"incident_id": "INC-002"})
         assert "already auto-executed" in result
 
@@ -73,14 +73,14 @@ class TestApproveAction:
 
     async def test_approve_unauthorized(self):
         set_providers(allowed_users={"bob"})
-        _incidents_store["INC-003"] = {"incident_id": "INC-003", "action_decision": "human_approval"}
+        incident_store.put("INC-003", {"incident_id": "INC-003", "action_decision": "human_approval"})
         result = await approve_action.ainvoke({"incident_id": "INC-003", "user_id": "alice"})
         assert "not authorized" in result
 
 
 class TestDenyAction:
     async def test_deny_with_reason(self):
-        _incidents_store["INC-001"] = {"incident_id": "INC-001"}
+        incident_store.put("INC-001", {"incident_id": "INC-001"})
         result = await deny_action.ainvoke({
             "incident_id": "INC-001",
             "reason": "I think this is a config issue",
@@ -95,7 +95,7 @@ class TestDenyAction:
 
 class TestEscalate:
     async def test_escalate_incident(self):
-        _incidents_store["INC-001"] = {"incident_id": "INC-001"}
+        incident_store.put("INC-001", {"incident_id": "INC-001"})
         result = await escalate.ainvoke({
             "incident_id": "INC-001",
             "reason": "Beyond my scope",

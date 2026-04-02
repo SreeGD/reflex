@@ -10,6 +10,8 @@ from typing import Optional
 
 from langchain_core.tools import tool
 
+from backend.app.incidents import incident_store
+
 # Provider instances are injected at module level by the engine before
 # the agent is built. This avoids passing providers through LangGraph's
 # tool-calling mechanism (which only supports serializable args).
@@ -19,8 +21,6 @@ _metrics_provider = None
 _actions_provider = None
 _alerts_provider = None
 _pipeline_graph = None
-_incidents_store = {}  # In-memory incident store (replaced by DB in production)
-_pending_actions = {}  # incident_id -> action dict awaiting approval
 _action_log = []  # Audit trail for all Tier 2 actions
 _allowed_users = None  # None = no restriction, set() = allow-list
 _UNSET = object()
@@ -54,11 +54,11 @@ def set_providers(
         _allowed_users = allowed_users
 
 
-def _store_incident(state: dict) -> None:
+def _store_incident(state: dict, source: str = "chat") -> None:
     """Store a completed incident analysis result."""
     incident_id = state.get("incident_id")
     if incident_id:
-        _incidents_store[incident_id] = state
+        incident_store.put(incident_id, state, source=source)
 
 
 # --- Tier 1: Query Tools ---
@@ -283,7 +283,7 @@ async def get_incident(incident_id: str) -> str:
     Args:
         incident_id: The incident ID (e.g., "INC-a1b2c3d4").
     """
-    state = _incidents_store.get(incident_id)
+    state = incident_store.get(incident_id)
     if state is None:
         return f"Incident {incident_id} not found. It may not have been analyzed in this session."
 
@@ -315,11 +315,12 @@ async def list_incidents() -> str:
 
     Use this when the user asks about recent or active incidents.
     """
-    if not _incidents_store:
+    all_incidents = incident_store.list_all()
+    if not all_incidents:
         return "No incidents have been analyzed in this session."
 
-    lines = [f"Analyzed incidents ({len(_incidents_store)}):", ""]
-    for iid, state in _incidents_store.items():
+    lines = [f"Analyzed incidents ({len(all_incidents)}):", ""]
+    for iid, state in all_incidents.items():
         service = state.get("service", "?")
         decision = state.get("action_decision", "?")
         confidence = state.get("confidence", 0)
@@ -371,7 +372,7 @@ async def approve_action(incident_id: str, user_id: str = "anonymous") -> str:
     if auth_error:
         return auth_error
 
-    state = _incidents_store.get(incident_id)
+    state = incident_store.get(incident_id)
     if state is None:
         return f"Incident {incident_id} not found."
 
@@ -429,7 +430,7 @@ async def deny_action(incident_id: str, reason: str, user_id: str = "anonymous")
     if auth_error:
         return auth_error
 
-    state = _incidents_store.get(incident_id)
+    state = incident_store.get(incident_id)
     if state is None:
         return f"Incident {incident_id} not found."
 
@@ -458,7 +459,7 @@ async def escalate(incident_id: str, reason: str = "", user_id: str = "anonymous
     if auth_error:
         return auth_error
 
-    state = _incidents_store.get(incident_id)
+    state = incident_store.get(incident_id)
     incident_data = state or {"incident_id": incident_id}
 
     if _alerts_provider is None:

@@ -7,6 +7,7 @@ import importlib
 import pytest
 
 from backend.app.chat.engine import ChatEngine, create_chat_engine
+from backend.app.incidents import incident_store
 from backend.app.chat.tools import (
     get_incident,
     list_incidents,
@@ -15,7 +16,6 @@ from backend.app.chat.tools import (
     run_analysis,
     search_knowledge,
     set_providers,
-    _incidents_store,
 )
 from backend.app.providers.factory import create_providers
 
@@ -42,10 +42,10 @@ def setup_providers(mock_providers):
         logs=mock_providers.logs,
         metrics=mock_providers.metrics,
     )
-    _incidents_store.clear()
+    incident_store.clear()
     yield
     set_providers(knowledge=None, logs=None, metrics=None, pipeline_graph=None)
-    _incidents_store.clear()
+    incident_store.clear()
 
 
 # --- query_logs tests ---
@@ -117,7 +117,7 @@ class TestRunAnalysis:
         assert "Analysis complete" in result
         assert "INC-" in result
         # Should also store the incident
-        assert len(_incidents_store) > 0
+        assert incident_store.count() > 0
 
 
 # --- get_incident / list_incidents tests ---
@@ -129,7 +129,7 @@ class TestIncidentTools:
 
     async def test_get_incident_found(self):
         # Manually store an incident
-        _incidents_store["INC-test123"] = {
+        incident_store.put("INC-test123", {
             "incident_id": "INC-test123",
             "service": "order-service",
             "is_noise": False,
@@ -138,7 +138,7 @@ class TestIncidentTools:
             "action_decision": "auto_execute",
             "blast_radius": "low",
             "evidence": ["RB-001", "OPS-1234"],
-        }
+        })
         result = await get_incident.ainvoke({"incident_id": "INC-test123"})
         assert "INC-test123" in result
         assert "order-service" in result
@@ -149,19 +149,19 @@ class TestIncidentTools:
         assert "No incidents" in result
 
     async def test_list_incidents_with_data(self):
-        _incidents_store["INC-001"] = {
+        incident_store.put("INC-001", {
             "incident_id": "INC-001",
             "service": "order-service",
             "is_noise": False,
             "confidence": 0.92,
             "action_decision": "auto_execute",
-        }
-        _incidents_store["INC-002"] = {
+        })
+        incident_store.put("INC-002", {
             "incident_id": "INC-002",
             "service": "payment-service",
             "is_noise": True,
             "noise_reason": "Known open issue",
-        }
+        })
         result = await list_incidents.ainvoke({})
         assert "INC-001" in result
         assert "INC-002" in result

@@ -266,6 +266,28 @@ def main():
         run_button = st.button("▶  Run Demo", type="primary", use_container_width=True)
 
         st.divider()
+        simulate_button = st.button("🚨 Simulate SEV-2 Alarm", use_container_width=True)
+        if simulate_button:
+            import json
+            from urllib.request import Request, urlopen
+            try:
+                _scenario = load_scenario(scenario_name)
+                alert = _scenario.get_alert_payload()
+                payload = json.dumps({"alerts": [alert]}).encode()
+                req = Request(
+                    "http://localhost:8000/webhook/alertmanager",
+                    data=payload,
+                    headers={"Content-Type": "application/json"},
+                )
+                resp = urlopen(req, timeout=120)
+                result = json.loads(resp.read())
+                st.success(f"Webhook processed: {len(result.get('processed', []))} incident(s)")
+                for iid in result.get("processed", []):
+                    st.code(iid)
+            except Exception as e:
+                st.error(f"Webhook failed: {e}. Is the API server running on port 8000?")
+
+        st.divider()
         st.markdown("**How it works:**")
         st.markdown("""
         1. Alert fires from monitoring
@@ -284,8 +306,9 @@ def main():
                 f"**Blast Radius:** `{scenario.get_blast_radius()}`")
 
     # Tabs
-    tab_demo, tab_rag, tab_knowledge = st.tabs([
+    tab_demo, tab_live, tab_rag, tab_knowledge = st.tabs([
         "Pipeline Demo",
+        "Live Incidents",
         "RAG Explorer",
         "Knowledge Base",
     ])
@@ -349,7 +372,47 @@ def main():
             st.divider()
             _render_mttr_comparison(scenario, cached[2], cached[1])
 
-    # ---- TAB 2: RAG Explorer ----
+    # ---- TAB 2: Live Incidents ----
+    with tab_live:
+        st.markdown("#### Live Incident Feed")
+        st.caption("Incidents received via webhook or chat analysis. Click 'Simulate SEV-2 Alarm' in the sidebar to send one.")
+
+        import json
+        from urllib.request import Request, urlopen
+
+        try:
+            resp = urlopen("http://localhost:8000/incidents", timeout=5)
+            incidents = json.loads(resp.read())
+        except Exception:
+            incidents = []
+
+        if not incidents:
+            st.info("No incidents yet. Use the **Simulate SEV-2 Alarm** button in the sidebar, or send a webhook via curl.")
+        else:
+            for inc in incidents:
+                severity_icon = {"critical": "🔴", "warning": "🟡"}.get(inc.get("severity", ""), "⚪")
+                decision_icon = {
+                    "auto_execute": "✅",
+                    "human_approval": "🟡",
+                    "escalate": "🔴",
+                }.get(inc.get("action_decision", ""), "⚪")
+
+                with st.expander(
+                    f"{severity_icon} **{inc['incident_id']}** | "
+                    f"`{inc.get('service', '?')}` | "
+                    f"{decision_icon} {inc.get('action_decision', '?')} | "
+                    f"confidence: {inc.get('confidence', 0):.2f}"
+                ):
+                    col_a, col_b = st.columns(2)
+                    col_a.metric("Confidence", f"{inc.get('confidence', 0):.2f}")
+                    col_b.metric("Blast Radius", inc.get("blast_radius", "?"))
+                    st.markdown(f"**Root Cause:** {inc.get('root_cause', 'N/A')}")
+                    st.markdown(f"**Source:** {inc.get('source', '?')}")
+
+            if st.button("🔄 Refresh"):
+                st.rerun()
+
+    # ---- TAB 3: RAG Explorer ----
     with tab_rag:
         _render_rag_explorer(scenario)
 

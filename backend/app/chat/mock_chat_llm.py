@@ -22,17 +22,17 @@ from langchain_core.tools import BaseTool
 _TOOL_ROUTES = [
     # --- Tier 2: Actions (most specific, check first) ---
     (
-        ["approve.*INC-", "approve the action", "approve action"],
+        ["approve.*inc-", "approve the action", "approve action"],
         "approve_action",
         lambda msg: {"incident_id": _extract_incident_id(msg), "user_id": "chat_user"},
     ),
     (
-        ["deny.*INC-", "deny the action", "deny action", "reject"],
+        ["deny.*inc-", "deny the action", "deny action", "reject"],
         "deny_action",
         lambda msg: {"incident_id": _extract_incident_id(msg), "reason": msg, "user_id": "chat_user"},
     ),
     (
-        ["escalate.*INC-", "escalate to", "escalate the"],
+        ["escalate.*inc-", "escalate to", "escalate the"],
         "escalate",
         lambda msg: {"incident_id": _extract_incident_id(msg), "reason": msg, "user_id": "chat_user"},
     ),
@@ -55,7 +55,7 @@ _TOOL_ROUTES = [
     ),
     # Get specific incident
     (
-        ["INC-[a-fA-F0-9]", "tell me about INC", "details.*INC", "incident INC"],
+        ["inc-[a-f0-9]", "tell me about inc", "details.*inc", "about incident"],
         "get_incident",
         lambda msg: {"incident_id": _extract_incident_id(msg)},
     ),

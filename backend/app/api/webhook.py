@@ -132,6 +132,13 @@ class IncidentSummary(BaseModel):
     blast_radius: str
     source: str
     stored_at: float
+    actioned_by: str = ""
+    actioned_at: float = 0
+
+
+class ActionRequest(BaseModel):
+    user_id: str = "demo-user"
+    reason: str = ""
 
 
 # --- Endpoints ---
@@ -219,3 +226,88 @@ async def get_incident(incident_id: str):
         raise HTTPException(404, f"Incident {incident_id} not found")
     # Return a clean copy without internal metadata
     return {k: v for k, v in state.items() if not k.startswith("_")}
+
+
+# --- Incident Action Endpoints ---
+
+async def _execute_action(incident_id: str, action_type: str, user_id: str, reason: str = "") -> Dict[str, Any]:
+    """Execute an action on an incident and update the store."""
+    import time as _time
+    from mock.providers.actions import MockActionsProvider
+    from mock.providers.alerts import MockAlertsProvider
+    import tempfile
+    from pathlib import Path
+
+    state = incident_store.get(incident_id)
+    if state is None:
+        raise HTTPException(404, f"Incident {incident_id} not found")
+
+    if state.get("_actioned_by"):
+        return {"status": "already_actioned", "message": f"Incident already actioned by {state['_actioned_by']}"}
+
+    actions_provider = MockActionsProvider()
+    alerts_provider = MockAlertsProvider(log_dir=Path(tempfile.mkdtemp()))
+    result = {}
+
+    if action_type == "approve":
+        action = (state.get("suggested_actions") or [{}])[0]
+        action_name = action.get("action", "restart_deployment")
+        deployment = action.get("deployment", state.get("service", "unknown"))
+        namespace = action.get("namespace", "default")
+
+        if "restart" in action_name:
+            result = await actions_provider.restart_deployment(namespace, deployment)
+        elif "scale" in action_name:
+            result = await actions_provider.scale_deployment(namespace, deployment, action.get("replicas", 3))
+        else:
+            result = {"status": "success", "message": f"Executed {action_name}"}
+
+        incident_store.update(incident_id, {
+            "action_decision": "approved",
+            "action_result": result,
+            "_actioned_by": user_id,
+            "_actioned_at": _time.time(),
+        })
+        return {"status": "approved", "message": f"Action approved by {user_id}. {result.get('message', '')}", "result": result}
+
+    elif action_type == "deny":
+        incident_store.update(incident_id, {
+            "action_decision": "denied",
+            "_actioned_by": user_id,
+            "_actioned_at": _time.time(),
+            "_deny_reason": reason,
+        })
+        return {"status": "denied", "message": f"Action denied by {user_id}. Reason: {reason}"}
+
+    elif action_type == "escalate":
+        await alerts_provider.escalate(
+            {"incident_id": incident_id, "service": state.get("service", "")},
+            reason or "Manual escalation",
+        )
+        incident_store.update(incident_id, {
+            "action_decision": "escalated",
+            "_actioned_by": user_id,
+            "_actioned_at": _time.time(),
+            "_escalate_reason": reason,
+        })
+        return {"status": "escalated", "message": f"Incident escalated by {user_id}. On-call team notified."}
+
+    raise HTTPException(400, f"Unknown action type: {action_type}")
+
+
+@router.post("/incidents/{incident_id}/approve")
+async def approve_incident(incident_id: str, request: ActionRequest):
+    """Approve a pending remediation action."""
+    return await _execute_action(incident_id, "approve", request.user_id)
+
+
+@router.post("/incidents/{incident_id}/deny")
+async def deny_incident(incident_id: str, request: ActionRequest):
+    """Deny a pending remediation action."""
+    return await _execute_action(incident_id, "deny", request.user_id, request.reason)
+
+
+@router.post("/incidents/{incident_id}/escalate")
+async def escalate_incident(incident_id: str, request: ActionRequest):
+    """Escalate an incident."""
+    return await _execute_action(incident_id, "escalate", request.user_id, request.reason)

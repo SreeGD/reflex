@@ -397,17 +397,101 @@ def main():
                     "escalate": "🔴",
                 }.get(inc.get("action_decision", ""), "⚪")
 
+                iid = inc["incident_id"]
+                decision = inc.get("action_decision", "")
+                actioned_by = inc.get("actioned_by", "")
+
+                # Status label
+                if actioned_by:
+                    status_label = {"approved": "✅ Approved", "denied": "❌ Denied", "escalated": "🔴 Escalated"}.get(decision, decision)
+                    status_label += f" by {actioned_by}"
+                else:
+                    status_label = f"{decision_icon} {decision}"
+
                 with st.expander(
-                    f"{severity_icon} **{inc['incident_id']}** | "
+                    f"{severity_icon} **{iid}** | "
                     f"`{inc.get('service', '?')}` | "
-                    f"{decision_icon} {inc.get('action_decision', '?')} | "
+                    f"{status_label} | "
                     f"confidence: {inc.get('confidence', 0):.2f}"
                 ):
-                    col_a, col_b = st.columns(2)
+                    col_a, col_b, col_c = st.columns(3)
                     col_a.metric("Confidence", f"{inc.get('confidence', 0):.2f}")
                     col_b.metric("Blast Radius", inc.get("blast_radius", "?"))
+                    col_c.metric("Severity", inc.get("severity", "?"))
                     st.markdown(f"**Root Cause:** {inc.get('root_cause', 'N/A')}")
                     st.markdown(f"**Source:** {inc.get('source', '?')}")
+
+                    # Fetch full details for decision brief
+                    try:
+                        _detail_resp = urlopen(f"http://localhost:8000/incidents/{iid}", timeout=5)
+                        _detail = json.loads(_detail_resp.read())
+                        brief = _detail.get("decision_brief")
+                        if brief:
+                            st.markdown("---")
+                            st.markdown(f"**Decision Brief:** {brief.get('summary', '')}")
+                            st.markdown(f"**Risk if act:** {brief.get('risk_if_act', '')}")
+                            st.markdown(f"**Risk if wait:** {brief.get('risk_if_wait', '')}")
+                            st.markdown(f"**Recommendation:** {brief.get('recommendation', '')}")
+                    except Exception:
+                        pass
+
+                    # Action buttons — only if not yet actioned
+                    if not actioned_by and decision == "human_approval":
+                        st.markdown("---")
+                        btn_col1, btn_col2, btn_col3 = st.columns(3)
+
+                        if btn_col1.button("✅ Approve", key=f"approve_{iid}", type="primary"):
+                            try:
+                                _payload = json.dumps({"user_id": "demo-user"}).encode()
+                                _req = Request(
+                                    f"http://localhost:8000/incidents/{iid}/approve",
+                                    data=_payload,
+                                    headers={"Content-Type": "application/json"},
+                                )
+                                _resp = urlopen(_req, timeout=30)
+                                _result = json.loads(_resp.read())
+                                st.success(_result.get("message", "Approved"))
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Failed: {e}")
+
+                        deny_reason = btn_col2.text_input("Reason", key=f"deny_reason_{iid}", placeholder="Optional")
+                        if btn_col2.button("❌ Deny", key=f"deny_{iid}"):
+                            try:
+                                _payload = json.dumps({"user_id": "demo-user", "reason": deny_reason}).encode()
+                                _req = Request(
+                                    f"http://localhost:8000/incidents/{iid}/deny",
+                                    data=_payload,
+                                    headers={"Content-Type": "application/json"},
+                                )
+                                _resp = urlopen(_req, timeout=30)
+                                _result = json.loads(_resp.read())
+                                st.warning(_result.get("message", "Denied"))
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Failed: {e}")
+
+                        if btn_col3.button("🔴 Escalate", key=f"escalate_{iid}"):
+                            try:
+                                _payload = json.dumps({"user_id": "demo-user", "reason": "Manual escalation"}).encode()
+                                _req = Request(
+                                    f"http://localhost:8000/incidents/{iid}/escalate",
+                                    data=_payload,
+                                    headers={"Content-Type": "application/json"},
+                                )
+                                _resp = urlopen(_req, timeout=30)
+                                _result = json.loads(_resp.read())
+                                st.info(_result.get("message", "Escalated"))
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Failed: {e}")
+
+                    elif not actioned_by and decision == "auto_execute":
+                        st.success("✅ Auto-executed by Reflex (confidence high, blast radius low)")
+                    elif not actioned_by and decision == "escalate":
+                        st.warning("🔴 Escalated — awaiting on-call response")
+                    elif actioned_by:
+                        st.info(f"Action taken: {decision} by {actioned_by}")
 
             if st.button("🔄 Refresh"):
                 st.rerun()

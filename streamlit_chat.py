@@ -207,13 +207,52 @@ with st.sidebar:
         for _inc in _incidents[:5]:
             _iid = _inc.get("incident_id", "?")
             _svc = _inc.get("service", "?")
+            _decision = _inc.get("action_decision", "")
+            _actioned = _inc.get("actioned_by", "")
             _sev = {"critical": "🔴", "warning": "🟡"}.get(_inc.get("severity", ""), "⚪")
-            if st.button(f"{_sev} {_iid}: {_svc}", key=f"inc_{_iid}"):
-                st.session_state.messages.append({
-                    "role": "user",
-                    "content": f"Tell me about incident {_iid}",
-                })
-                st.rerun()
+
+            # Status display
+            if _actioned:
+                _status = {"approved": "✅", "denied": "❌", "escalated": "🔴"}.get(_decision, "⚪")
+                st.markdown(f"{_status} **{_iid}**: {_svc} — {_decision}")
+            else:
+                if st.button(f"{_sev} {_iid}: {_svc}", key=f"inc_{_iid}"):
+                    st.session_state.messages.append({
+                        "role": "user",
+                        "content": f"Tell me about incident {_iid}",
+                    })
+                    st.rerun()
+
+                # Action buttons for pending incidents
+                if _decision == "human_approval" and not _actioned:
+                    _c1, _c2, _c3 = st.columns(3)
+                    if _c1.button("✅", key=f"sa_{_iid}", help="Approve"):
+                        try:
+                            _p = json.dumps({"user_id": "chat-user"}).encode()
+                            _r = Request(f"{BASE_URL}/incidents/{_iid}/approve", data=_p, headers={"Content-Type": "application/json"})
+                            _resp = urlopen(_r, timeout=30)
+                            st.success("Approved")
+                            st.rerun()
+                        except Exception as _e:
+                            st.error(str(_e))
+                    if _c2.button("❌", key=f"sd_{_iid}", help="Deny"):
+                        try:
+                            _p = json.dumps({"user_id": "chat-user", "reason": "Denied via chat"}).encode()
+                            _r = Request(f"{BASE_URL}/incidents/{_iid}/deny", data=_p, headers={"Content-Type": "application/json"})
+                            _resp = urlopen(_r, timeout=30)
+                            st.warning("Denied")
+                            st.rerun()
+                        except Exception as _e:
+                            st.error(str(_e))
+                    if _c3.button("🔴", key=f"se_{_iid}", help="Escalate"):
+                        try:
+                            _p = json.dumps({"user_id": "chat-user", "reason": "Escalated via chat"}).encode()
+                            _r = Request(f"{BASE_URL}/incidents/{_iid}/escalate", data=_p, headers={"Content-Type": "application/json"})
+                            _resp = urlopen(_r, timeout=30)
+                            st.info("Escalated")
+                            st.rerun()
+                        except Exception as _e:
+                            st.error(str(_e))
     else:
         st.caption("No incidents yet")
 

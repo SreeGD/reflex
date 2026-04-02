@@ -48,6 +48,14 @@ class IncidentStore:
                 if state.get("_stored_at", 0) > timestamp
             ]
 
+    def update(self, incident_id: str, updates: Dict[str, Any]) -> bool:
+        """Merge partial updates into an existing incident. Returns True if found."""
+        with self._lock:
+            if incident_id not in self._incidents:
+                return False
+            self._incidents[incident_id].update(updates)
+            return True
+
     def count(self) -> int:
         """Return total incident count."""
         with self._lock:
@@ -74,6 +82,8 @@ class IncidentStore:
                     "blast_radius": state.get("blast_radius", ""),
                     "source": state.get("_source", "unknown"),
                     "stored_at": state.get("_stored_at", 0),
+                    "actioned_by": state.get("_actioned_by", ""),
+                    "actioned_at": state.get("_actioned_at", 0),
                 })
             return sorted(summaries, key=lambda x: x["stored_at"], reverse=True)
 

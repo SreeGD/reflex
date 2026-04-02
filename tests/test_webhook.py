@@ -145,3 +145,99 @@ class TestWebhookPipeline:
         assert "incident_id" in state
         assert state.get("service") == "order-service"
         assert "root_cause" in state
+
+
+# --- IncidentStore.update() tests ---
+
+class TestIncidentStoreUpdate:
+    def setup_method(self):
+        self.store = IncidentStore()
+
+    def test_update_existing(self):
+        self.store.put("INC-001", {"service": "a", "action_decision": "human_approval"})
+        result = self.store.update("INC-001", {"action_decision": "approved", "_actioned_by": "alice"})
+        assert result is True
+        state = self.store.get("INC-001")
+        assert state["action_decision"] == "approved"
+        assert state["_actioned_by"] == "alice"
+        assert state["service"] == "a"  # original field preserved
+
+    def test_update_nonexistent(self):
+        result = self.store.update("INC-999", {"foo": "bar"})
+        assert result is False
+
+
+# --- Action endpoint tests ---
+
+class TestActionEndpoints:
+    @pytest.fixture(autouse=True)
+    def reset_store(self):
+        incident_store.clear()
+        yield
+        incident_store.clear()
+
+    async def test_approve_action(self):
+        from backend.app.api.webhook import _execute_action
+
+        incident_store.put("INC-001", {
+            "incident_id": "INC-001",
+            "service": "order-service",
+            "action_decision": "human_approval",
+            "suggested_actions": [{"action": "restart_deployment", "deployment": "order-service", "namespace": "prod"}],
+        }, source="webhook")
+
+        result = await _execute_action("INC-001", "approve", "alice")
+        assert result["status"] == "approved"
+        assert "alice" in result["message"]
+
+        state = incident_store.get("INC-001")
+        assert state["action_decision"] == "approved"
+        assert state["_actioned_by"] == "alice"
+
+    async def test_deny_action(self):
+        from backend.app.api.webhook import _execute_action
+
+        incident_store.put("INC-002", {
+            "incident_id": "INC-002",
+            "service": "order-service",
+            "action_decision": "human_approval",
+        }, source="webhook")
+
+        result = await _execute_action("INC-002", "deny", "bob", "Config issue")
+        assert result["status"] == "denied"
+        assert "bob" in result["message"]
+
+        state = incident_store.get("INC-002")
+        assert state["action_decision"] == "denied"
+        assert state["_deny_reason"] == "Config issue"
+
+    async def test_escalate_action(self):
+        from backend.app.api.webhook import _execute_action
+
+        incident_store.put("INC-003", {
+            "incident_id": "INC-003",
+            "service": "order-service",
+        }, source="webhook")
+
+        result = await _execute_action("INC-003", "escalate", "charlie", "Beyond scope")
+        assert result["status"] == "escalated"
+
+        state = incident_store.get("INC-003")
+        assert state["_actioned_by"] == "charlie"
+
+    async def test_already_actioned(self):
+        from backend.app.api.webhook import _execute_action
+
+        incident_store.put("INC-004", {
+            "incident_id": "INC-004",
+            "_actioned_by": "alice",
+        }, source="webhook")
+
+        result = await _execute_action("INC-004", "approve", "bob")
+        assert result["status"] == "already_actioned"
+
+    async def test_not_found(self):
+        from backend.app.api.webhook import _execute_action
+
+        with pytest.raises(Exception):
+            await _execute_action("INC-999", "approve", "alice")

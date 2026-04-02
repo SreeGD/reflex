@@ -67,3 +67,16 @@ async def chat(request: ChatRequest) -> ChatResponseModel:
         severity=response.severity,
         conversation_id=response.conversation_id,
     )
+
+
+class HistoryMessage(BaseModel):
+    role: str
+    content: str
+
+
+@router.get("/{session_id}/history", response_model=List[HistoryMessage])
+async def get_history(session_id: str) -> List[HistoryMessage]:
+    """Retrieve conversation history for a session."""
+    engine = _get_engine()
+    history = await engine.get_history(session_id)
+    return [HistoryMessage(**msg) for msg in history]

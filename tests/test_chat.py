@@ -71,8 +71,14 @@ class TestSearchKnowledgeTool:
 
     async def test_tool_in_registry(self):
         tools = get_tools()
-        assert len(tools) == 1
-        assert tools[0].name == "search_knowledge"
+        assert len(tools) == 6
+        tool_names = {t.name for t in tools}
+        assert "search_knowledge" in tool_names
+        assert "query_logs" in tool_names
+        assert "query_metrics" in tool_names
+        assert "run_analysis" in tool_names
+        assert "get_incident" in tool_names
+        assert "list_incidents" in tool_names
 
     async def test_no_provider_returns_message(self):
         set_providers(knowledge=None)

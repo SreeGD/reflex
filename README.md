@@ -47,17 +47,50 @@ export ANTHROPIC_API_KEY=sk-ant-...
 python demo.py
 ```
 
+### Run the API Server
+
+```bash
+python -m uvicorn backend.app.main:app --reload --port 8000
+```
+
+Opens at http://localhost:8000/docs with Swagger UI. Key endpoints:
+- `POST /webhook/alertmanager` — Receive Alertmanager-style alarm payloads
+- `POST /chat` — Conversational AI chat
+- `GET /incidents` — List analyzed incidents
+- `POST /incidents/{id}/approve` — Approve a pending action
+
 ### Run the Streamlit Visual Demo
 
 ```bash
 pip install streamlit plotly
-streamlit run streamlit_demo.py
+streamlit run streamlit_demo.py --server.port 8503
 ```
 
-Opens at http://localhost:8501 with three tabs:
+Opens at http://localhost:8503 with four tabs:
 - **Pipeline Demo** — Select a scenario, run the full Observe → Analyze → Act pipeline with metrics charts
+- **Live Incidents** — View incidents from webhooks, approve/deny/escalate with action buttons
 - **RAG Explorer** — Free-text search over runbooks, Jira tickets, and Confluence docs
 - **Knowledge Base Browser** — Browse all indexed knowledge
+
+### Run the Chat UI
+
+```bash
+streamlit run streamlit_chat.py --server.port 8501
+```
+
+Opens at http://localhost:8501 — conversational AI assistant for incident management:
+- Ask questions: "What runbooks exist for database pool issues?"
+- Query logs: "Show me error logs for order-service"
+- Run analysis: "Run analysis on order-service"
+- Take action: "Approve the action for INC-xxx"
+- Sidebar shows active incidents with approve/deny/escalate buttons
+
+### Run the Chat CLI
+
+```bash
+python chat_cli.py                    # remote mode (needs API server)
+python chat_cli.py --local            # local mode (no server needed)
+```
 
 ### What the Demo Shows
 
@@ -371,6 +404,85 @@ quadrantChart
     quadrant-4 Escalate
 ```
 
+### ChatOps Architecture
+
+The ChatOps layer adds a conversational AI interface on top of the analysis pipeline. The chat agent is a separate LangGraph ReAct agent that wraps the pipeline as one of its tools.
+
+```mermaid
+graph LR
+    subgraph Adapters
+        A1[Slack Bot]
+        A2[CLI REPL]
+        A3[Streamlit Chat]
+        A4[API Client]
+    end
+
+    subgraph "Chat Engine (Backend)"
+        CE[POST /chat<br/><i>LangGraph ReAct Agent</i>]
+        CP[Layered Prompts<br/><i>Persona + Tools + Safety</i>]
+        CK[MemorySaver<br/><i>Conversation State</i>]
+    end
+
+    subgraph "10 Tools"
+        T1[search_knowledge]
+        T2[query_logs]
+        T3[query_metrics]
+        T4[run_analysis]
+        T5[get_incident]
+        T6[list_incidents]
+        T7[approve_action]
+        T8[deny_action]
+        T9[escalate]
+        T10[execute_remediation]
+    end
+
+    subgraph "Existing Infrastructure"
+        P[Reflex Pipeline]
+        IS[Incident Store]
+        PR[Providers]
+    end
+
+    A1 & A2 & A3 & A4 --> CE
+    CE --> CP & CK
+    CE --> T1 & T2 & T3 & T4 & T5 & T6 & T7 & T8 & T9 & T10
+    T4 --> P
+    T1 & T2 & T3 --> PR
+    T5 & T6 & T7 & T8 & T9 --> IS
+
+    style CE fill:#339AF0,color:#fff
+    style P fill:#40C057,color:#fff
+    style IS fill:#FFA94D,color:#000
+```
+
+**LLM Provider:** Supports Anthropic (Claude), OpenAI (GPT), and Mock backends. Auto-detects from API keys or `LLM_BACKEND` env var. Configurable per purpose (chat, rca, review).
+
+**Prompt System:** Layered markdown files (`base_persona.md`, `tool_instructions.md`, `safety_rails.md`) composed at runtime with dynamic context injection.
+
+### Webhook & Incident Action Flow
+
+```mermaid
+sequenceDiagram
+    participant AM as Alertmanager
+    participant WH as POST /webhook/alertmanager
+    participant PL as Reflex Pipeline
+    participant IS as Incident Store
+    participant UI as Streamlit UI
+    participant ENG as Engineer
+
+    AM->>WH: SEV-2 alarm payload
+    WH->>WH: Match scenario, filter severity
+    WH->>PL: Run pipeline (Intake→Noise→RCA→Review)
+    PL-->>IS: Store incident result
+    WH-->>AM: {processed: [INC-xxx]}
+
+    UI->>IS: GET /incidents (poll)
+    IS-->>UI: Incident list with RCA + decision
+
+    ENG->>UI: Click "Approve" on INC-xxx
+    UI->>IS: POST /incidents/INC-xxx/approve
+    IS-->>UI: Action executed, status updated
+```
+
 ### MCP Integration (Production)
 
 For production, MCP servers provide uniform data access:
@@ -404,13 +516,33 @@ Batch ingestion (Confluence, Jira, GitHub → pgvector) uses direct API clients,
 ```
 reflex/
 ├── demo.py                          # CLI demo entry point
-├── streamlit_demo.py                # Visual demo (Streamlit)
+├── streamlit_demo.py                # Visual demo (Streamlit) — pipeline + live incidents
+├── streamlit_chat.py                # Chat UI (Streamlit) — conversational assistant
+├── chat_cli.py                      # Chat CLI — terminal REPL
 ├── pyproject.toml
 ├── backend/
 │   └── app/
+│       ├── main.py                  # FastAPI entry point
+│       ├── incidents.py             # Shared incident store (singleton)
+│       ├── api/
+│       │   ├── chat.py              # POST /chat, GET /chat/{id}/history
+│       │   └── webhook.py           # POST /webhook/alertmanager, GET /incidents, action endpoints
+│       ├── adapters/
+│       │   └── slack.py             # Slack bot adapter (Block Kit + Socket Mode stub)
+│       ├── chat/
+│       │   ├── engine.py            # LangGraph ReAct chat agent
+│       │   ├── tools.py             # 10 tools (6 query + 4 action)
+│       │   ├── response.py          # ChatResponse dataclass (adapter contract)
+│       │   ├── logging.py           # Structured NDJSON conversation logger
+│       │   ├── mock_chat_llm.py     # MockChatLLM with tool-calling support
+│       │   └── prompts/             # Layered markdown prompt files
+│       │       ├── base_persona.md
+│       │       ├── tool_instructions.md
+│       │       └── safety_rails.md
 │       ├── providers/               # Abstract interfaces (the replaceable seam)
-│       │   ├── base.py              # 6 Protocol definitions
-│       │   └── factory.py           # create_providers(mode="mock"|"production")
+│       │   ├── base.py              # 7 Protocol definitions (incl. LLMProvider)
+│       │   ├── factory.py           # create_providers(mode="mock"|"production")
+│       │   └── llm.py              # LLM provider factory (Anthropic, OpenAI, Mock)
 │       └── agents/
 │           ├── state.py             # LangGraph AgentState
 │           ├── graph.py             # StateGraph wiring
@@ -427,21 +559,15 @@ reflex/
 ├── mock/
 │   ├── config.py                    # ShopFast service definitions (7 microservices)
 │   ├── generators/                  # Metrics, logs, trace generators
-│   ├── providers/                   # Mock implementations of all 6 providers
-│   │   ├── metrics.py               # MockMetricsProvider (generators)
-│   │   ├── logs.py                  # MockLogsProvider (templates)
-│   │   ├── knowledge.py             # MockKnowledgeProvider (keyword search)
-│   │   ├── actions.py               # MockActionsProvider (log + simulate)
-│   │   ├── alerts.py                # MockAlertsProvider (terminal + file)
-│   │   ├── context.py               # MockContextProvider (scenario config)
-│   │   └── mock_llm.py              # MockLLM (pre-built RCA + critique responses)
+│   ├── providers/                   # Mock implementations of all 6 providers + MockLLM
 │   ├── scenarios/                   # 5 incident scenarios
 │   └── data/
 │       ├── runbooks/                # 8 markdown runbooks
 │       ├── jira_tickets.json        # 15 historical incident tickets
 │       └── confluence_pages/        # 8 architecture + SOP docs
-└── shared/
-    └── openapi.yaml
+├── tests/                           # 95 tests (pytest + pytest-asyncio)
+├── plans/                           # Implementation plans
+└── logs/                            # Chat conversation logs (NDJSON)
 ```
 
 ## Mock System: ShopFast E-Commerce
@@ -485,25 +611,35 @@ gantt
 
     section Increment 1
     MVP Demo (mock providers, LangGraph pipeline)       :done,    i1, 2026-03-01, 2026-03-31
+    ChatOps (chat engine, webhook, action workflow)     :done,    i1b, 2026-04-01, 2026-04-02
 
     section Increment 2
-    pgvector knowledge base + real embeddings           :active,  i2, 2026-04-01, 2026-05-15
+    pgvector knowledge base + real embeddings           :active,  i2, 2026-04-03, 2026-05-15
     Direct API ingestion (Confluence, Jira, GitHub)     :         i2b, 2026-04-15, 2026-05-15
 
     section Increment 3
     MCP servers (Prometheus, ES, K8s, Slack)             :         i3, 2026-05-15, 2026-07-01
-    Human approval flow (LangGraph interrupt)            :         i3b, 2026-06-01, 2026-07-01
+    Slack bot deployment (Socket Mode → Events API)      :         i3b, 2026-06-01, 2026-07-01
 
     section Increment 4
     ML baselining + anomaly detection                    :         i4, 2026-07-01, 2026-08-15
     Closed-loop: verify fix → update knowledge base      :         i4b, 2026-07-15, 2026-08-15
 ```
 
-### Increment 1 — MVP Demo (current)
+### Increment 1 — MVP Demo + ChatOps (done)
 - Provider pattern with mock implementations
-- LangGraph pipeline (Intake → Noise → RCA → Action Router → Remediation → Alert)
+- LangGraph pipeline (Intake → Noise → RCA → Review → Remediation → Alert)
 - 5 incident scenarios with mock data generators
 - CLI + Streamlit demos
+- ChatOps: conversational AI chat engine with 10 tools (6 query + 4 action)
+- LLM provider supporting Anthropic, OpenAI, and Mock backends
+- Webhook endpoint (`POST /webhook/alertmanager`) for receiving alarms
+- Incident action workflow: approve/deny/escalate via API and Streamlit UIs
+- Shared incident store with polling API
+- Streamlit chat UI + CLI REPL + Slack adapter stub
+- Layered prompt system with safety rails
+- Structured NDJSON conversation logging
+- 95 tests
 
 ### Increment 2 — Real Knowledge Base
 - PostgreSQL + pgvector for embeddings

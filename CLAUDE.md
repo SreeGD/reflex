@@ -4,73 +4,75 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Reflex — Observe → Analyze → Act. Integrates with existing monitoring tools (Prometheus, ELK, OpenTelemetry) and adds AI-powered analysis and remediation.
+Reflex — Observe → Analyze → Act. Integrates with existing monitoring tools (Prometheus, ELK, OpenTelemetry) and adds AI-powered analysis and remediation with a conversational ChatOps interface.
 
-**Stack:** Python (FastAPI), React + TypeScript, PostgreSQL (TimescaleDB + pgvector), LangGraph, Celery + Redis
+**Stack:** Python 3.9+ (FastAPI), LangGraph, LangChain, Streamlit, PostgreSQL (TimescaleDB + pgvector planned)
 
 ## Architecture
 
-- **Observe:** Receive alarms via webhooks from existing monitoring tools
-- **Analyze:** LangGraph 6-step pipeline — Baselining → Detection → Noise Management → Correlation → RCA → Prediction
-  - LLM (via LangChain ChatModel) for RCA, correlation, noise management
-  - ML models (scikit-learn/statsmodels) for baselining, detection, prediction
-  - RAG over runbooks (markdown/git) and Jira tickets (pgvector) for knowledge-augmented RCA
-- **Act:** Alerting (Slack/PagerDuty/email) + Remediation (Agentic AI with MCP servers)
-
-## Use Cases
-
-1. **Intelligent Alert Triage** — Filter noise, deduplicate, correlate 100 alerts into 3 real incidents
-2. **Automated Root Cause Analysis** — RCA in seconds via RAG over runbooks, Jira, Confluence, codebase + live MCP queries
-3. **Self-Healing Infrastructure** — Auto-remediate known low-risk patterns (pod crash loops, cache full, connection pool exhaustion) via Kubernetes MCP
-4. **Knowledge Capture & Retention** — Continuously mine Confluence, Jira, GitHub, runbooks into pgvector; institutional knowledge survives team turnover
-5. **MTTR Reduction** — From ~75 min (manual) to <10 min (automated detect → analyze → remediate → verify)
-6. **Proactive Incident Prevention** — Prediction node spots trends (disk filling, latency creeping) and triggers remediation before outage
-7. **On-Call Engineer Augmentation** — Full context at 3 AM: root cause, similar past incidents, runbook steps, confidence score
-8. **Alert Fatigue Elimination** — Noise management + correlation reduces alert volume 60-80%; every alert that reaches a human is real and enriched
-9. **Cross-Service Incident Correlation** — Correlate metrics + logs across services via MCP; one unified incident instead of separate tickets per team
-10. **Compliance & Audit Trail** — Every MCP call logged (who, what, when, result); full trail from detection through remediation
+- **Observe:** Receive alarms via `POST /webhook/alertmanager` (Alertmanager-compatible)
+- **Analyze:** LangGraph pipeline — Intake → Noise Check → RCA (LLM + RAG) → Review Agent (risk + critique) → Decision
+- **Act:** Auto-execute, human approval (with Decision Brief), or escalate based on confidence x blast radius
+- **ChatOps:** Separate LangGraph ReAct agent with 10 tools wrapping the pipeline and providers. Adapters: Streamlit chat, CLI, Slack (stub)
 
 ## Build & Run
 
 ```bash
-# Infrastructure
-docker compose up -d
-
-# Backend
-cd backend
+# Install
 pip install -e ".[dev]"
-alembic upgrade head
-uvicorn app.main:app --reload
 
-# Frontend
-cd frontend
-npm install
-npm run dev
+# API server
+python -m uvicorn backend.app.main:app --reload --port 8000
 
-# Celery worker
-cd backend
-celery -A app.workers.celery_app worker --loglevel=info
+# Streamlit demo (pipeline + live incidents + actions)
+streamlit run streamlit_demo.py --server.port 8503
+
+# Streamlit chat UI
+streamlit run streamlit_chat.py --server.port 8501
+
+# Chat CLI
+python chat_cli.py              # remote (needs API server)
+python chat_cli.py --local      # local (no server needed)
+
+# CLI demo
+python demo.py --mock-llm
 
 # Tests
-cd backend
-pytest
-pytest tests/test_specific.py::test_name  # single test
+python -m pytest tests/ -v
 ```
 
 ## Key Directories
 
-- `backend/app/agents/` — LangGraph analyze pipeline (state.py defines shared state, graph.py wires nodes)
-- `backend/app/knowledge/` — RAG system: runbook_loader, jira_sync, embeddings, retriever
-- `backend/app/ml/` — ML models for baselining, anomaly detection, forecasting
-- `backend/app/services/` — Business logic layer
-- `backend/app/api/` — FastAPI routers
-- `backend/app/models/` — SQLAlchemy ORM models (PostgreSQL + TimescaleDB hypertables + pgvector)
+- `backend/app/agents/` — LangGraph analysis pipeline (state.py, graph.py, nodes/)
+- `backend/app/chat/` — ChatOps engine (engine.py, tools.py, prompts/, logging.py)
+- `backend/app/api/` — FastAPI routers (chat.py, webhook.py)
+- `backend/app/providers/` — Abstract interfaces + LLM provider (base.py, factory.py, llm.py)
+- `backend/app/incidents.py` — Shared incident store (singleton, in-memory)
+- `backend/app/adapters/` — Platform adapters (slack.py)
+- `mock/` — Mock providers, scenarios, data (runbooks, Jira tickets, Confluence pages)
+- `tests/` — 95 tests (pytest + pytest-asyncio)
+
+## Key API Endpoints
+
+- `POST /webhook/alertmanager` — Receive alarms, run pipeline, store incidents
+- `POST /chat` — Conversational AI (session_id, message, user_id)
+- `GET /chat/{session_id}/history` — Conversation history
+- `GET /incidents` — List incidents (optional `?since=` for polling)
+- `GET /incidents/{id}` — Full incident details
+- `POST /incidents/{id}/approve` — Approve pending action
+- `POST /incidents/{id}/deny` — Deny with reason
+- `POST /incidents/{id}/escalate` — Escalate to on-call
+- `POST /analyze` — Run pipeline on custom alarm payload
+- `POST /scenarios/{name}/run` — Run a demo scenario
+- `GET /scenarios` — List available scenarios
 
 ## Conventions
 
-- Async SQLAlchemy for all database operations
-- Pydantic Settings for configuration (env-based via .env)
-- Alembic for database migrations
-- Celery tasks for long-running operations (LLM calls, ML inference)
-- pgvector VECTOR(1536) columns for RAG embeddings
-- MCP servers for remediation action execution (future increments)
+- Python 3.9 compatibility — use `Optional[str]` not `str | None`, `List` not `list[]`
+- Provider pattern: all external access via Protocol interfaces in `providers/base.py`
+- Mock mode works without any API keys or infrastructure
+- LLM provider auto-detects from env: `ANTHROPIC_API_KEY` → Anthropic, `OPENAI_API_KEY` → OpenAI, else → Mock
+- Chat tools are thin wrappers around provider interfaces
+- Layered prompts in `chat/prompts/*.md` — edit without code changes
+- Structured NDJSON logging for all chat interactions
+- pytest with `asyncio_mode = "auto"` for async tests

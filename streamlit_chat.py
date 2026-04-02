@@ -8,6 +8,7 @@ Usage:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import sys
 import uuid
@@ -44,6 +45,41 @@ def get_engine():
     return st.session_state.engine
 
 
+def _run_async(coro):
+    """Run an async coroutine safely, handling existing event loops."""
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                future = pool.submit(asyncio.run, coro)
+                return future.result(timeout=120)
+        else:
+            return loop.run_until_complete(coro)
+    except RuntimeError:
+        return asyncio.run(coro)
+
+
+def chat_local(message: str) -> dict:
+    """Send a message directly to the engine."""
+    engine = get_engine()
+
+    async def _do():
+        response = await engine.chat(
+            st.session_state.session_id,
+            message,
+            user_id="streamlit",
+        )
+        return {
+            "text": response.text,
+            "structured_data": response.structured_data,
+            "actions": [{"label": a.label, "action_id": a.action_id} for a in response.actions],
+            "severity": response.severity,
+        }
+
+    return _run_async(_do())
+
+
 def chat_remote(message: str) -> dict:
     """Send a message via the API."""
     payload = json.dumps({
@@ -56,30 +92,14 @@ def chat_remote(message: str) -> dict:
         data=payload,
         headers={"Content-Type": "application/json"},
     )
-    resp = urlopen(req, timeout=60)
+    resp = urlopen(req, timeout=120)
     return json.loads(resp.read())
-
-
-async def chat_local(message: str) -> dict:
-    """Send a message directly to the engine."""
-    engine = get_engine()
-    response = await engine.chat(
-        st.session_state.session_id,
-        message,
-        user_id="streamlit",
-    )
-    return {
-        "text": response.text,
-        "structured_data": response.structured_data,
-        "actions": [{"label": a.label, "action_id": a.action_id} for a in response.actions],
-        "severity": response.severity,
-    }
 
 
 # --- Severity colors ---
 
 SEVERITY_COLORS = {
-    "info": None,
+    "info": "",
     "warning": "🟡",
     "critical": "🔴",
 }
@@ -101,28 +121,12 @@ for msg in st.session_state.messages:
         prefix = SEVERITY_COLORS.get(severity, "")
         if prefix:
             st.markdown(f"{prefix} **[{severity.upper()}]**")
-
         st.markdown(msg["content"])
 
-        # Render structured data as expandable sections
         structured = msg.get("structured_data")
         if structured:
             with st.expander("Structured Data"):
                 st.json(structured)
-
-        # Render action buttons
-        actions = msg.get("actions", [])
-        if actions:
-            cols = st.columns(len(actions))
-            for i, action in enumerate(actions):
-                style = action.get("style", "default")
-                btn_type = "primary" if style == "primary" else "secondary"
-                if cols[i].button(action["label"], key=f"{msg.get('id', i)}_{action['action_id']}", type=btn_type):
-                    st.session_state.messages.append({
-                        "role": "user",
-                        "content": action["label"],
-                    })
-                    st.rerun()
 
 # Chat input
 if prompt := st.chat_input("Ask Reflex about an incident..."):
@@ -136,8 +140,7 @@ if prompt := st.chat_input("Ask Reflex about an incident..."):
         with st.spinner("Thinking..."):
             try:
                 if LOCAL_MODE:
-                    import asyncio
-                    data = asyncio.run(chat_local(prompt))
+                    data = chat_local(prompt)
                 else:
                     data = chat_remote(prompt)
 
@@ -155,7 +158,6 @@ if prompt := st.chat_input("Ask Reflex about an incident..."):
                     with st.expander("Structured Data"):
                         st.json(structured)
 
-                # Store message
                 st.session_state.messages.append({
                     "role": "assistant",
                     "content": response_text,

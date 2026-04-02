@@ -17,43 +17,72 @@ from langchain_core.outputs import ChatGeneration, ChatResult
 from langchain_core.tools import BaseTool
 
 # Tool routing rules: keywords → (tool_name, args_builder)
+# Routes ordered from most specific to least specific.
+# Multi-word patterns are checked first to avoid false matches.
 _TOOL_ROUTES = [
+    # --- Tier 2: Actions (most specific, check first) ---
+    (
+        ["approve.*INC-", "approve the action", "approve action"],
+        "approve_action",
+        lambda msg: {"incident_id": _extract_incident_id(msg), "user_id": "chat_user"},
+    ),
+    (
+        ["deny.*INC-", "deny the action", "deny action", "reject"],
+        "deny_action",
+        lambda msg: {"incident_id": _extract_incident_id(msg), "reason": msg, "user_id": "chat_user"},
+    ),
+    (
+        ["escalate.*INC-", "escalate to", "escalate the"],
+        "escalate",
+        lambda msg: {"incident_id": _extract_incident_id(msg), "reason": msg, "user_id": "chat_user"},
+    ),
+    (
+        ["restart.*service", "scale.*service", "execute remediation", "rollback.*service"],
+        "execute_remediation",
+        lambda msg: {
+            "service": _extract_service(msg),
+            "action_type": "restart" if "restart" in msg.lower() else "scale" if "scale" in msg.lower() else "rollback",
+            "namespace": _extract_namespace(msg),
+            "user_id": "chat_user",
+        },
+    ),
+    # --- Tier 1: Specific queries (multi-word patterns first) ---
+    # List incidents (must come before get_incident to avoid "list" + "incident" mismatch)
+    (
+        ["list incidents", "list all incidents", "recent incidents", "active incidents", "all incidents", "show incidents"],
+        "list_incidents",
+        lambda _msg: {},
+    ),
+    # Get specific incident
+    (
+        ["INC-[a-fA-F0-9]", "tell me about INC", "details.*INC", "incident INC"],
+        "get_incident",
+        lambda msg: {"incident_id": _extract_incident_id(msg)},
+    ),
+    # Run full analysis
+    (
+        ["run analysis", "full analysis", "analyze.*service", "investigate.*service", "what's happening"],
+        "run_analysis",
+        lambda msg: {"service": _extract_service(msg)},
+    ),
     # Logs queries
     (
-        ["logs", "log entries", "errors for", "error logs", "show.*logs"],
+        ["error logs", "log entries", "show.*logs", "logs for", "recent logs"],
         "query_logs",
         lambda msg: {"service": _extract_service(msg), "level": "ERROR", "limit": 10},
     ),
     # Metrics queries
     (
-        ["metric", "cpu", "memory usage", "latency", "error rate", "connections active", "request rate"],
+        ["metric", "cpu usage", "memory usage", "latency", "error rate", "connections.active", "request rate", "db_connections"],
         "query_metrics",
         lambda msg: {"metric": _extract_metric(msg), "service": _extract_service(msg)},
     ),
-    # Run full analysis
-    (
-        ["analyze", "run analysis", "full analysis", "investigate", "what's happening"],
-        "run_analysis",
-        lambda msg: {"service": _extract_service(msg)},
-    ),
-    # Get specific incident
-    (
-        ["incident INC-", "tell me about INC-", "details.*INC-"],
-        "get_incident",
-        lambda msg: {"incident_id": _extract_incident_id(msg)},
-    ),
-    # List incidents
-    (
-        ["list incidents", "recent incidents", "active incidents", "all incidents"],
-        "list_incidents",
-        lambda _msg: {},
-    ),
-    # Knowledge search (broadest — keep last)
+    # Knowledge search (broadest — always last)
     (
         [
             "runbook", "ticket", "knowledge", "how to", "procedure", "sop",
-            "jira", "confluence", "search", "find", "show me", "what do we know",
-            "pool", "database", "connection", "restart", "scale", "deploy",
+            "jira", "confluence", "what do we know", "past incident",
+            "pool exhaustion", "database pool", "connection pool",
         ],
         "search_knowledge",
         lambda msg: {"query": msg, "limit": 5},
@@ -94,8 +123,19 @@ def _extract_metric(msg: str) -> str:
 def _extract_incident_id(msg: str) -> str:
     """Extract an incident ID from a message."""
     import re
-    match = re.search(r'(INC-[a-f0-9]+)', msg)
+    match = re.search(r'(INC-[a-fA-F0-9]+)', msg)
     return match.group(1) if match else "INC-unknown"
+
+
+def _extract_namespace(msg: str) -> str:
+    """Extract a Kubernetes namespace from a message."""
+    import re
+    match = re.search(r'(?:namespace|ns)\s+([a-z][\w-]+)', msg.lower())
+    if match:
+        return match.group(1)
+    if "prod" in msg.lower():
+        return "shopfast-prod"
+    return "default"
 
 
 class MockChatLLM(BaseChatModel):
@@ -131,22 +171,28 @@ class MockChatLLM(BaseChatModel):
     ) -> ChatResult:
         import re
 
-        # Check if we have tool results in the messages
-        has_tool_result = any(
-            getattr(m, "type", "") == "tool" for m in messages
-        )
+        # Find the last user message and check if a tool result came AFTER it.
+        # In multi-turn conversations with checkpointing, old tool results
+        # from previous turns will be present — we only care about the current turn.
+        last_user_idx = -1
+        last_tool_idx = -1
+        for i, m in enumerate(messages):
+            msg_type = getattr(m, "type", "")
+            if msg_type == "human":
+                last_user_idx = i
+            elif msg_type == "tool":
+                last_tool_idx = i
 
-        if has_tool_result:
-            # Find the last tool result
-            tool_content = ""
-            for m in reversed(messages):
-                if getattr(m, "type", "") == "tool":
-                    tool_content = m.content
-                    break
+        # A tool result is "fresh" only if it came after the last user message
+        fresh_tool_result = last_tool_idx > last_user_idx and last_user_idx >= 0
+
+        if fresh_tool_result:
+            # We just called a tool for this turn — synthesize a response
+            tool_content = messages[last_tool_idx].content
 
             if "not available" in tool_content or "not found" in tool_content:
                 text = tool_content
-            elif "No matching" in tool_content or "No logs" in tool_content or "No data" in tool_content:
+            elif "No matching" in tool_content or "No logs" in tool_content or "No data" in tool_content or "No incidents" in tool_content:
                 text = tool_content
             elif tool_content:
                 text = (
@@ -160,12 +206,10 @@ class MockChatLLM(BaseChatModel):
             msg = AIMessage(content=text)
             return ChatResult(generations=[ChatGeneration(message=msg)])
 
-        # First call — decide which tool to use
+        # No fresh tool result — route the latest user message to a tool
         last_user_msg = ""
-        for m in reversed(messages):
-            if getattr(m, "type", "") == "human":
-                last_user_msg = m.content
-                break
+        if last_user_idx >= 0:
+            last_user_msg = messages[last_user_idx].content
 
         if self._bound_tools and last_user_msg:
             msg_lower = last_user_msg.lower()

@@ -7,7 +7,7 @@ post-funding without changing any pipeline code.
 
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 
 @runtime_checkable
@@ -163,5 +163,24 @@ class ContextProvider(Protocol):
         - active_incident_count: int
         - recent_action_history: list[dict] (action, service, status)
         - service_tier: int (1-3)
+        """
+        ...
+
+
+@runtime_checkable
+class LLMProvider(Protocol):
+    """Provides LLM instances configured per purpose.
+
+    Mock: returns MockLLM or MockChatLLM.
+    Real: returns ChatAnthropic or ChatOpenAI with appropriate settings.
+    """
+
+    def get_model(self, purpose: str = "chat") -> Any:
+        """Return an LLM instance for the given purpose.
+
+        Purposes:
+        - "chat": Conversational agent (may use higher temperature)
+        - "rca": Root cause analysis (temperature=0, deterministic)
+        - "review": Review/critique (temperature=0, deterministic)
         """
         ...

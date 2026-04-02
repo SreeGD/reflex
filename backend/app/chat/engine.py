@@ -11,20 +11,9 @@ from typing import Any, Dict, Optional
 
 from langgraph.prebuilt import create_react_agent
 
+from backend.app.chat.prompts import compose_prompt, get_default_context
 from backend.app.chat.response import ChatResponse
 from backend.app.chat.tools import get_tools, set_providers
-
-# Default system prompt (Phase 2 will replace with layered markdown files)
-_DEFAULT_SYSTEM_PROMPT = (
-    "You are Reflex, an AI-powered incident management assistant. "
-    "You help on-call engineers investigate and resolve incidents by "
-    "querying logs, metrics, runbooks, and past incidents.\n\n"
-    "When an engineer asks a question, use your tools to find relevant "
-    "information before answering. Be concise, direct, and actionable. "
-    "Always cite your sources (runbook IDs, ticket keys, etc).\n\n"
-    "If you don't have enough information to answer confidently, say so "
-    "and suggest what the engineer should investigate next."
-)
 
 
 class ChatEngine:
@@ -40,7 +29,12 @@ class ChatEngine:
         # Inject providers into the tools module
         set_providers(knowledge=knowledge_provider)
 
-        self._system_prompt = system_prompt or _DEFAULT_SYSTEM_PROMPT
+        # Use layered prompt system if no explicit prompt provided
+        if system_prompt is None:
+            context = get_default_context()
+            system_prompt = compose_prompt(context=context)
+
+        self._system_prompt = system_prompt
         tools = get_tools()
 
         self._agent = create_react_agent(
@@ -88,18 +82,24 @@ class ChatEngine:
 
 
 def create_chat_engine(
-    llm: Any = None,
+    llm_provider: Any = None,
     knowledge_provider: Any = None,
     checkpointer: Any = None,
     system_prompt: Optional[str] = None,
 ) -> ChatEngine:
     """Factory function to create a ChatEngine with sensible defaults.
 
-    Uses MockLLM and MockKnowledgeProvider if no arguments are provided.
+    Args:
+        llm_provider: An LLMProvider instance. Auto-detected from environment if None.
+        knowledge_provider: A KnowledgeProvider instance. Uses mock if None.
+        checkpointer: LangGraph checkpointer for state persistence.
+        system_prompt: Override the layered prompt system with a custom prompt.
     """
-    if llm is None:
-        from backend.app.chat.mock_chat_llm import MockChatLLM
-        llm = MockChatLLM()
+    if llm_provider is None:
+        from backend.app.providers.llm import create_llm_provider
+        llm_provider = create_llm_provider()
+
+    llm = llm_provider.get_model("chat")
 
     if knowledge_provider is None:
         from mock.providers.knowledge import MockKnowledgeProvider

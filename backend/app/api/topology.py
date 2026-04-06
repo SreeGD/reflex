@@ -25,6 +25,29 @@ async def get_full_topology():
     return graph.to_dict()
 
 
+# Static routes BEFORE parameterized /{service} routes
+@router.get("/sources")
+async def get_sources():
+    """Get discovery source statistics."""
+    graph = get_topology()
+    return graph.get_source_stats()
+
+
+@router.get("/docs/mermaid", response_class=PlainTextResponse)
+async def get_mermaid(highlight: Optional[str] = None):
+    """Get a Mermaid diagram of the service topology."""
+    graph = get_topology()
+    return generate_mermaid(graph, highlight_service=highlight or "")
+
+
+@router.get("/docs/catalog", response_class=PlainTextResponse)
+async def get_catalog():
+    """Get the service catalog as markdown."""
+    graph = get_topology()
+    return generate_catalog(graph)
+
+
+# Parameterized routes AFTER static routes
 @router.get("/{service}")
 async def get_service(service: str):
     """Get details for a single service."""
@@ -62,24 +85,3 @@ async def get_blast_radius(service: str, action: str = "restart_deployment"):
         raise HTTPException(404, f"Service {service} not found")
 
     return calculate_blast_radius(graph, service, action)
-
-
-@router.get("/sources")
-async def get_sources():
-    """Get discovery source statistics."""
-    graph = get_topology()
-    return graph.get_source_stats()
-
-
-@router.get("/docs/mermaid", response_class=PlainTextResponse)
-async def get_mermaid(highlight: Optional[str] = None):
-    """Get a Mermaid diagram of the service topology."""
-    graph = get_topology()
-    return generate_mermaid(graph, highlight_service=highlight or "")
-
-
-@router.get("/docs/catalog", response_class=PlainTextResponse)
-async def get_catalog():
-    """Get the service catalog as markdown."""
-    graph = get_topology()
-    return generate_catalog(graph)

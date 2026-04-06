@@ -64,6 +64,13 @@ async def get_blast_radius(service: str, action: str = "restart_deployment"):
     return calculate_blast_radius(graph, service, action)
 
 
+@router.get("/sources")
+async def get_sources():
+    """Get discovery source statistics."""
+    graph = get_topology()
+    return graph.get_source_stats()
+
+
 @router.get("/docs/mermaid", response_class=PlainTextResponse)
 async def get_mermaid(highlight: Optional[str] = None):
     """Get a Mermaid diagram of the service topology."""

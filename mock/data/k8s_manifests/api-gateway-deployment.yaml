@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: api-gateway
+  name: api-gateway
+  namespace: shopfast-prod
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: api-gateway
+  template:
+    metadata:
+      labels:
+        app: api-gateway
+    spec:
+      containers:
+      - env:
+        - name: CATALOG_SERVICE_URL
+          value: http://catalog-service:8081
+        - name: CART_SERVICE_URL
+          value: http://cart-service:8082
+        - name: ORDER_SERVICE_URL
+          value: http://order-service:8083
+        - name: PAYMENT_SERVICE_URL
+          value: http://payment-service:8084
+        - name: REDIS_HOST
+          value: redis.shopfast-prod.svc.cluster.local
+        - name: LOG_LEVEL
+          value: info
+        envFrom:
+        - configMapRef:
+            name: api-gateway-config
+        image: shopfast/api-gateway:1.4.2
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        name: api-gateway
+        ports:
+        - containerPort: 8080
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        resources:
+          limits:
+            cpu: 500m
+            memory: 512Mi
+          requests:
+            cpu: 200m
+            memory: 256Mi

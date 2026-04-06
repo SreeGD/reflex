@@ -1,0 +1,8 @@
+apiVersion: v1
+data:
+  cart_ttl_hours: '72'
+  max_items_per_cart: '50'
+kind: ConfigMap
+metadata:
+  name: cart-service-config
+  namespace: shopfast-prod

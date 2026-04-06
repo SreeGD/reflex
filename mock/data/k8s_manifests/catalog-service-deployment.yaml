@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: catalog-service
+  name: catalog-service
+  namespace: shopfast-prod
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: catalog-service
+  template:
+    metadata:
+      labels:
+        app: catalog-service
+    spec:
+      containers:
+      - env:
+        - name: INVENTORY_SERVICE_URL
+          value: http://inventory-service:8086
+        - name: ELASTICSEARCH_URL
+          value: http://opensearch.shopfast-prod.svc.cluster.local:9200
+        - name: DATABASE_URL
+          value: postgresql://catalog_user@shopfast-db.shopfast-prod.svc.cluster.local:5432/shopfast_catalog
+        - name: LOG_LEVEL
+          value: info
+        envFrom:
+        - configMapRef:
+            name: catalog-service-config
+        image: shopfast/catalog-service:2.1.0
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8081
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        name: catalog-service
+        ports:
+        - containerPort: 8081
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8081
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        resources:
+          limits:
+            cpu: 300m
+            memory: 256Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi

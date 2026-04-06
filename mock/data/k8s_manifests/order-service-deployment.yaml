@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: order-service
+  name: order-service
+  namespace: shopfast-prod
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: order-service
+  template:
+    metadata:
+      labels:
+        app: order-service
+    spec:
+      containers:
+      - env:
+        - name: PAYMENT_SERVICE_URL
+          value: http://payment-service:8084
+        - name: INVENTORY_SERVICE_URL
+          value: http://inventory-service:8086
+        - name: NOTIFICATION_SERVICE_URL
+          value: http://notification-service:8085
+        - name: DATABASE_URL
+          value: postgresql://order_user@shopfast-db.shopfast-prod.svc.cluster.local:5432/shopfast_orders
+        - name: RABBITMQ_URL
+          value: amqp://guest:guest@rabbitmq.shopfast-prod.svc.cluster.local:5672
+        - name: DB_POOL_MAX
+          value: '20'
+        - name: LOG_LEVEL
+          value: info
+        envFrom:
+        - configMapRef:
+            name: order-service-config
+        image: shopfast/order-service:3.2.1
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8083
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        name: order-service
+        ports:
+        - containerPort: 8083
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8083
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        resources:
+          limits:
+            cpu: 500m
+            memory: 512Mi
+          requests:
+            cpu: 200m
+            memory: 256Mi

@@ -1,0 +1,8 @@
+apiVersion: v1
+data:
+  low_stock_threshold: '10'
+  stock_cache_ttl_seconds: '60'
+kind: ConfigMap
+metadata:
+  name: inventory-service-config
+  namespace: shopfast-prod

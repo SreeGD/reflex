@@ -35,7 +35,8 @@ _SYSTEM_TITLE = "MedFlow Health Platform" if _ACTIVE_SYSTEM == "healthcare" else
 
 def load_scenario(name: str):
     import importlib
-    mod = importlib.import_module(SCENARIOS[name])
+    scenarios, _ = get_active_scenarios()
+    mod = importlib.import_module(scenarios[name])
     return mod.create_scenario()
 
 
@@ -73,13 +74,15 @@ _HEALTHCARE_POSITIONS = {
     "alert-service": (3.5, 1),
 }
 
-_NODE_POSITIONS = _HEALTHCARE_POSITIONS if _ACTIVE_SYSTEM == "healthcare" else _SHOPFAST_POSITIONS
+def _get_positions():
+    from mock.config import get_active_system
+    return _HEALTHCARE_POSITIONS if get_active_system() == "healthcare" else _SHOPFAST_POSITIONS
 
 
 def render_dependency_graph(affected_service=None):
     from mock.config import get_active_config
     _, dep_graph = get_active_config()
-    positions = _NODE_POSITIONS
+    positions = _get_positions()
 
     edge_x, edge_y = [], []
     for src, targets in dep_graph.items():
@@ -258,17 +261,40 @@ async def run_rag_search(scenario, query: str):
 # Main UI
 # ---------------------------------------------------------------------------
 def main():
+    from mock.config import set_system_override, get_active_scenarios as _get_scenarios, get_active_config as _get_config
+
     # Sidebar
     with st.sidebar:
         st.image("https://img.icons8.com/fluency/96/maintenance.png", width=64)
-        st.title(_SYSTEM_TITLE)
+
+        # System selector
+        system_options = {"ShopFast E-Commerce": "shopfast", "MedFlow Healthcare": "healthcare"}
+        if "active_system" not in st.session_state:
+            st.session_state.active_system = _ACTIVE_SYSTEM
+        selected_label = st.selectbox(
+            "Demo System",
+            list(system_options.keys()),
+            index=list(system_options.values()).index(st.session_state.active_system)
+            if st.session_state.active_system in system_options.values() else 0,
+        )
+        selected_system = system_options[selected_label]
+        if selected_system != st.session_state.active_system:
+            st.session_state.active_system = selected_system
+            set_system_override(selected_system)
+            st.rerun()
+        set_system_override(selected_system)
+
+        # Dynamic titles and configs
+        _sys_title = "MedFlow Health Platform" if selected_system == "healthcare" else "Pulse Platform"
+        st.title(_sys_title)
         st.caption("Observe → Analyze → Act")
         st.divider()
 
+        _active_scenarios, _active_labels = _get_scenarios(selected_system)
         scenario_name = st.selectbox(
             "Select Incident Scenario",
-            list(SCENARIOS.keys()),
-            format_func=lambda x: SCENARIO_LABELS[x],
+            list(_active_scenarios.keys()),
+            format_func=lambda x: _active_labels.get(x, x),
         )
 
         run_button = st.button("▶  Run Demo", type="primary", use_container_width=True)
@@ -522,7 +548,7 @@ def main():
             _topo_nodes = _topo.get("nodes", [])
             _topo_edges = _topo.get("edges", [])
 
-            positions = dict(_NODE_POSITIONS)
+            positions = dict(_get_positions())
 
             health_colors = {"healthy": "#40C057", "degraded": "#FFA94D", "down": "#FF6B6B"}
             affected_service = scenario.get_affected_service()

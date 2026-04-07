@@ -109,14 +109,15 @@ SEVERITY_COLORS = {
 
 import os as _os
 _CHAT_SYSTEM = _os.environ.get("MOCK_SYSTEM", "shopfast")
-_CHAT_TITLE = "🏥 MedFlow Chat" if _CHAT_SYSTEM == "healthcare" else "🔧 Pulse Chat"
+_current_sys = st.session_state.get("chat_system", _CHAT_SYSTEM)
+_CHAT_TITLE = "🏥 MedFlow Chat" if _current_sys == "healthcare" else "🔧 Pulse Chat"
 
 st.title(_CHAT_TITLE)
 st.caption(
     f"AI-powered incident management assistant | "
     f"Session: `{st.session_state.session_id}` | "
     f"Mode: {'local' if LOCAL_MODE else 'remote'} | "
-    f"System: {_CHAT_SYSTEM}"
+    f"System: {_current_sys}"
 )
 
 # Display message history
@@ -193,6 +194,25 @@ if prompt := st.chat_input("Ask Reflex about an incident..."):
 
 # Sidebar
 with st.sidebar:
+    # System selector
+    _sys_options = {"ShopFast E-Commerce": "shopfast", "MedFlow Healthcare": "healthcare"}
+    if "chat_system" not in st.session_state:
+        st.session_state.chat_system = _CHAT_SYSTEM
+    _sel_label = st.selectbox(
+        "Demo System",
+        list(_sys_options.keys()),
+        index=list(_sys_options.values()).index(st.session_state.chat_system)
+        if st.session_state.chat_system in _sys_options.values() else 0,
+        key="system_selector",
+    )
+    _sel_system = _sys_options[_sel_label]
+    if _sel_system != st.session_state.chat_system:
+        st.session_state.chat_system = _sel_system
+        st.session_state.messages = []
+        st.session_state.engine = None
+        st.rerun()
+
+    st.divider()
     st.header("Session")
     if st.button("New Session"):
         st.session_state.session_id = f"streamlit-{uuid.uuid4().hex[:8]}"

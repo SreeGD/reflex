@@ -182,24 +182,36 @@ def get_downstream_services(service: str) -> list[str]:
     return DEPENDENCY_GRAPH.get(service, [])
 
 
+# Thread-local override for per-request system selection (set by API/UI)
+_system_override = None
+
+
+def set_system_override(system):
+    """Override the active system (for per-request switching in API/UI)."""
+    global _system_override
+    _system_override = system
+
+
 def get_active_system() -> str:
     """Return the active mock system name."""
+    if _system_override:
+        return _system_override
     import os
     return os.environ.get("MOCK_SYSTEM", "shopfast").lower()
 
 
-def get_active_config():
-    """Return (SERVICES, DEPENDENCY_GRAPH) for the active mock system."""
-    system = get_active_system()
+def get_active_config(system=None):
+    """Return (SERVICES, DEPENDENCY_GRAPH) for the given or active mock system."""
+    system = system or get_active_system()
     if system == "healthcare":
         from mock.healthcare_config import HEALTHCARE_SERVICES, HEALTHCARE_DEPENDENCY_GRAPH
         return HEALTHCARE_SERVICES, HEALTHCARE_DEPENDENCY_GRAPH
     return SERVICES, DEPENDENCY_GRAPH
 
 
-def get_active_scenarios():
-    """Return (SCENARIOS_DICT, LABELS_DICT) for the active mock system."""
-    system = get_active_system()
+def get_active_scenarios(system=None):
+    """Return (SCENARIOS_DICT, LABELS_DICT) for the given or active mock system."""
+    system = system or get_active_system()
     if system == "healthcare":
         from mock.healthcare_config import HEALTHCARE_SCENARIOS, HEALTHCARE_SCENARIO_LABELS
         return HEALTHCARE_SCENARIOS, HEALTHCARE_SCENARIO_LABELS

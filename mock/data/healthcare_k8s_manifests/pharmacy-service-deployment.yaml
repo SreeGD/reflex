@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: pharmacy-service
+  name: pharmacy-service
+  namespace: medflow-prod
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: pharmacy-service
+  template:
+    metadata:
+      labels:
+        app: pharmacy-service
+    spec:
+      containers:
+      - env:
+        - name: MEDICATION_SERVICE_URL
+          value: http://medication-service:9081
+        - name: PATIENT_SERVICE_URL
+          value: http://patient-service:9083
+        - name: DATABASE_URL
+          value: postgresql://pharmacy_svc_user@medflow-db.medflow-prod.svc.cluster.local:5432/medflow_pharmacy
+        - name: DB_POOL_MAX
+          value: '15'
+        - name: REDIS_HOST
+          value: redis-pharmacy.medflow-prod.svc.cluster.local
+        - name: JVM_HEAP_MAX
+          value: 4096m
+        - name: PHI_ENCRYPTION_KEY_REF
+          value: pharmacy-service-phi-key
+        - name: PYXIS_API_URL
+          value: https://pyxis.medflow.internal/api/v2
+        - name: OMNICELL_API_URL
+          value: https://omnicell.medflow.internal/api/v1
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          value: medflow-kafka.medflow-prod.svc.cluster.local:9092
+        - name: KAFKA_TOPIC_MEDICATION_ORDERS
+          value: medication-orders
+        - name: CONTROLLED_SUBSTANCE_AUDIT_ENABLED
+          value: 'true'
+        - name: LOG_LEVEL
+          value: info
+        envFrom:
+        - configMapRef:
+            name: pharmacy-service-config
+        image: medflow/pharmacy-service:2.4.0
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 9086
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        name: pharmacy-service
+        ports:
+        - containerPort: 9086
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 9086
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        resources:
+          limits:
+            cpu: 500m
+            memory: 4096Mi
+          requests:
+            cpu: 200m
+            memory: 512Mi

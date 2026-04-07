@@ -1,0 +1,11 @@
+apiVersion: v1
+data:
+  cabinet_sync_interval_seconds: '60'
+  controlled_substance_dual_verify: 'true'
+  dispensing_queue_max_size: '500'
+  drug_interaction_cache_max_entries: '10000'
+  formulary_cache_ttl_seconds: '1800'
+kind: ConfigMap
+metadata:
+  name: pharmacy-service-config
+  namespace: medflow-prod

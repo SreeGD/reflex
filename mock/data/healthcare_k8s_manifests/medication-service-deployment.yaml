@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: medication-service
+  name: medication-service
+  namespace: medflow-prod
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: medication-service
+  template:
+    metadata:
+      labels:
+        app: medication-service
+    spec:
+      containers:
+      - env:
+        - name: PHARMACY_SERVICE_URL
+          value: http://pharmacy-service:9086
+        - name: DATABASE_URL
+          value: postgresql://medication_svc_user@medflow-db.medflow-prod.svc.cluster.local:5432/medflow_medications
+        - name: DB_POOL_MAX
+          value: '15'
+        - name: FHIR_BASE_URL
+          value: http://ehr-gateway:9080/fhir/r4
+        - name: HL7_VERSION
+          value: FHIR_R4
+        - name: NDC_DATABASE_VERSION
+          value: 2026-Q1
+        - name: RXNORM_API_URL
+          value: https://rxnav.nlm.nih.gov/REST
+        - name: FORMULARY_CACHE_TTL_SECONDS
+          value: '1800'
+        - name: LOG_LEVEL
+          value: info
+        envFrom:
+        - configMapRef:
+            name: medication-service-config
+        image: medflow/medication-service:2.3.1
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 9081
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        name: medication-service
+        ports:
+        - containerPort: 9081
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 9081
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        resources:
+          limits:
+            cpu: 500m
+            memory: 512Mi
+          requests:
+            cpu: 200m
+            memory: 256Mi

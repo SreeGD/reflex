@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: billing-service
+  name: billing-service
+  namespace: medflow-prod
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: billing-service
+  template:
+    metadata:
+      labels:
+        app: billing-service
+    spec:
+      containers:
+      - env:
+        - name: PATIENT_SERVICE_URL
+          value: http://patient-service:9083
+        - name: DATABASE_URL
+          value: postgresql://billing_svc_user@medflow-db.medflow-prod.svc.cluster.local:5432/medflow_billing
+        - name: DB_POOL_MAX
+          value: '15'
+        - name: CLEARINGHOUSE_URL
+          value: https://api.clearinghouse.example.com/v2
+        - name: INSURANCE_VERIFY_TIMEOUT_MS
+          value: '25000'
+        - name: EDI_837_ENDPOINT
+          value: https://edi.clearinghouse.example.com/837
+        - name: EDI_835_ENDPOINT
+          value: https://edi.clearinghouse.example.com/835
+        - name: PHI_ENCRYPTION_KEY_REF
+          value: billing-service-phi-key
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          value: medflow-kafka.medflow-prod.svc.cluster.local:9092
+        - name: KAFKA_TOPIC_BILLING_CLAIMS
+          value: billing-claims
+        - name: LOG_LEVEL
+          value: info
+        envFrom:
+        - configMapRef:
+            name: billing-service-config
+        image: medflow/billing-service:3.1.0
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 9084
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        name: billing-service
+        ports:
+        - containerPort: 9084
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 9084
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        resources:
+          limits:
+            cpu: 500m
+            memory: 512Mi
+          requests:
+            cpu: 200m
+            memory: 256Mi

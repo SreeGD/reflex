@@ -1,0 +1,10 @@
+apiVersion: v1
+data:
+  drug_interaction_severity_levels: contraindicated,severe,moderate,minor
+  formulary_tier_count: '5'
+  interaction_check_timeout_ms: '5000'
+  ndc_update_schedule: 0 2 * * 0
+kind: ConfigMap
+metadata:
+  name: medication-service-config
+  namespace: medflow-prod

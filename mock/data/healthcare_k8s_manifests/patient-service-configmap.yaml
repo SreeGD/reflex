@@ -1,0 +1,11 @@
+apiVersion: v1
+data:
+  admission_workflow_timeout_seconds: '60'
+  audit_log_retention_days: '2555'
+  fhir_patient_search_max_results: '100'
+  hipaa_access_log_enabled: 'true'
+  phi_encryption_algorithm: AES-256-GCM
+kind: ConfigMap
+metadata:
+  name: patient-service-config
+  namespace: medflow-prod

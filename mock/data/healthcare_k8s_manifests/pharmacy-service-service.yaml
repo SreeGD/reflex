@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: pharmacy-service
+  namespace: medflow-prod
+spec:
+  ports:
+  - port: 9086
+    protocol: TCP
+    targetPort: 9086
+  selector:
+    app: pharmacy-service
+  type: ClusterIP

@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: scheduling-service
+  name: scheduling-service
+  namespace: medflow-prod
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: scheduling-service
+  template:
+    metadata:
+      labels:
+        app: scheduling-service
+    spec:
+      containers:
+      - env:
+        - name: PATIENT_SERVICE_URL
+          value: http://patient-service:9083
+        - name: REDIS_HOST
+          value: redis-scheduling.medflow-prod.svc.cluster.local
+        - name: REDIS_PORT
+          value: '6379'
+        - name: REDIS_POOL_MAX
+          value: '50'
+        - name: DATABASE_URL
+          value: postgresql://scheduling_svc_user@medflow-db.medflow-prod.svc.cluster.local:5432/medflow_scheduling
+        - name: DB_POOL_MAX
+          value: '10'
+        - name: FHIR_BASE_URL
+          value: http://ehr-gateway:9080/fhir/r4
+        - name: LOG_LEVEL
+          value: info
+        envFrom:
+        - configMapRef:
+            name: scheduling-service-config
+        image: medflow/scheduling-service:1.9.2
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 9082
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        name: scheduling-service
+        ports:
+        - containerPort: 9082
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 9082
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        resources:
+          limits:
+            cpu: 300m
+            memory: 256Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi

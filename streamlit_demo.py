@@ -26,21 +26,11 @@ st.set_page_config(
 # ---------------------------------------------------------------------------
 # Scenario registry
 # ---------------------------------------------------------------------------
-SCENARIOS = {
-    "db_pool_exhaustion": "mock.scenarios.db_pool_exhaustion",
-    "payment_timeout_cascade": "mock.scenarios.payment_timeout_cascade",
-    "memory_leak": "mock.scenarios.memory_leak",
-    "redis_connection_storm": "mock.scenarios.redis_connection_storm",
-    "slow_query_cascade": "mock.scenarios.slow_query_cascade",
-}
+from mock.config import get_active_scenarios, get_active_system
 
-SCENARIO_LABELS = {
-    "db_pool_exhaustion": "DB Connection Pool Exhaustion",
-    "payment_timeout_cascade": "Payment Gateway Timeout Cascade",
-    "memory_leak": "JVM Memory Leak",
-    "redis_connection_storm": "Redis Connection Storm",
-    "slow_query_cascade": "Slow Query Cascade",
-}
+SCENARIOS, SCENARIO_LABELS = get_active_scenarios()
+_ACTIVE_SYSTEM = get_active_system()
+_SYSTEM_TITLE = "MedFlow Health Platform" if _ACTIVE_SYSTEM == "healthcare" else "Reflex Platform"
 
 
 def load_scenario(name: str):
@@ -253,7 +243,7 @@ def main():
     # Sidebar
     with st.sidebar:
         st.image("https://img.icons8.com/fluency/96/maintenance.png", width=64)
-        st.title("Reflex Platform")
+        st.title(_SYSTEM_TITLE)
         st.caption("Observe → Analyze → Act")
         st.divider()
 

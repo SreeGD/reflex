@@ -10,7 +10,7 @@ from typing import List, Dict
 
 from .models import RiskAssessment, RiskFactor
 
-SERVICE_TIERS: Dict[str, int] = {
+_SHOPFAST_TIERS: Dict[str, int] = {
     "payment-service": 1,
     "order-service": 1,
     "api-gateway": 1,
@@ -19,6 +19,29 @@ SERVICE_TIERS: Dict[str, int] = {
     "inventory-service": 2,
     "notification-service": 3,
 }
+
+_HEALTHCARE_TIERS: Dict[str, int] = {
+    "patient-service": 1,
+    "billing-service": 1,
+    "ehr-gateway": 1,
+    "medication-service": 2,
+    "scheduling-service": 2,
+    "pharmacy-service": 2,
+    "alert-service": 3,
+}
+
+
+def _get_service_tiers() -> Dict[str, int]:
+    try:
+        from mock.config import get_active_system
+        if get_active_system() == "healthcare":
+            return _HEALTHCARE_TIERS
+    except Exception:
+        pass
+    return _SHOPFAST_TIERS
+
+
+SERVICE_TIERS = _get_service_tiers()
 
 BLAST_RADIUS_MAP: Dict[str, str] = {
     "restart_deployment": "low",

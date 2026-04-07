@@ -180,3 +180,39 @@ def get_upstream_services(service: str) -> list[str]:
 def get_downstream_services(service: str) -> list[str]:
     """Return services this service calls."""
     return DEPENDENCY_GRAPH.get(service, [])
+
+
+def get_active_system() -> str:
+    """Return the active mock system name."""
+    import os
+    return os.environ.get("MOCK_SYSTEM", "shopfast").lower()
+
+
+def get_active_config():
+    """Return (SERVICES, DEPENDENCY_GRAPH) for the active mock system."""
+    system = get_active_system()
+    if system == "healthcare":
+        from mock.healthcare_config import HEALTHCARE_SERVICES, HEALTHCARE_DEPENDENCY_GRAPH
+        return HEALTHCARE_SERVICES, HEALTHCARE_DEPENDENCY_GRAPH
+    return SERVICES, DEPENDENCY_GRAPH
+
+
+def get_active_scenarios():
+    """Return (SCENARIOS_DICT, LABELS_DICT) for the active mock system."""
+    system = get_active_system()
+    if system == "healthcare":
+        from mock.healthcare_config import HEALTHCARE_SCENARIOS, HEALTHCARE_SCENARIO_LABELS
+        return HEALTHCARE_SCENARIOS, HEALTHCARE_SCENARIO_LABELS
+    return {
+        "db_pool_exhaustion": "mock.scenarios.db_pool_exhaustion",
+        "payment_timeout_cascade": "mock.scenarios.payment_timeout_cascade",
+        "memory_leak": "mock.scenarios.memory_leak",
+        "redis_connection_storm": "mock.scenarios.redis_connection_storm",
+        "slow_query_cascade": "mock.scenarios.slow_query_cascade",
+    }, {
+        "db_pool_exhaustion": "DB Connection Pool Exhaustion",
+        "payment_timeout_cascade": "Payment Gateway Timeout Cascade",
+        "memory_leak": "JVM Memory Leak",
+        "redis_connection_storm": "Redis Connection Storm",
+        "slow_query_cascade": "Slow Query Cascade",
+    }

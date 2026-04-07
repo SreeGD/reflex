@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: patient-service
+  name: patient-service
+  namespace: medflow-prod
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: patient-service
+  template:
+    metadata:
+      labels:
+        app: patient-service
+    spec:
+      containers:
+      - env:
+        - name: MEDICATION_SERVICE_URL
+          value: http://medication-service:9081
+        - name: BILLING_SERVICE_URL
+          value: http://billing-service:9084
+        - name: DATABASE_URL
+          value: postgresql://patient_svc_user@medflow-db.medflow-prod.svc.cluster.local:5432/medflow_patients
+        - name: DB_POOL_MAX
+          value: '20'
+        - name: FHIR_BASE_URL
+          value: http://ehr-gateway:9080/fhir/r4
+        - name: HL7_VERSION
+          value: FHIR_R4
+        - name: PHI_ENCRYPTION_KEY_REF
+          value: patient-service-phi-key
+        - name: PHI_AUDIT_ENABLED
+          value: 'true'
+        - name: MRN_GENERATION_STRATEGY
+          value: sequential
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          value: medflow-kafka.medflow-prod.svc.cluster.local:9092
+        - name: KAFKA_TOPIC_PATIENT_EVENTS
+          value: patient-events
+        - name: LOG_LEVEL
+          value: info
+        envFrom:
+        - configMapRef:
+            name: patient-service-config
+        image: medflow/patient-service:2.1.0
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 9083
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        name: patient-service
+        ports:
+        - containerPort: 9083
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 9083
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 1024Mi
+          requests:
+            cpu: 300m
+            memory: 512Mi

@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: billing-service
+  namespace: medflow-prod
+spec:
+  ports:
+  - port: 9084
+    protocol: TCP
+    targetPort: 9084
+  selector:
+    app: billing-service
+  type: ClusterIP

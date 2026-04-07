@@ -22,13 +22,8 @@ from rich.text import Text
 
 console = Console()
 
-SCENARIOS = {
-    "db_pool_exhaustion": "mock.scenarios.db_pool_exhaustion",
-    "payment_timeout_cascade": "mock.scenarios.payment_timeout_cascade",
-    "memory_leak": "mock.scenarios.memory_leak",
-    "redis_connection_storm": "mock.scenarios.redis_connection_storm",
-    "slow_query_cascade": "mock.scenarios.slow_query_cascade",
-}
+from mock.config import get_active_scenarios
+SCENARIOS, _LABELS = get_active_scenarios()
 
 
 def load_scenario(name: str):

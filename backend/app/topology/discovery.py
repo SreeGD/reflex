@@ -10,8 +10,9 @@ from backend.app.topology.graph import TopologyGraph
 
 
 def from_config() -> TopologyGraph:
-    """Build topology from mock/config.py SERVICES and DEPENDENCY_GRAPH."""
-    from mock.config import DEPENDENCY_GRAPH, SERVICES, ServiceType
+    """Build topology from the active mock system config."""
+    from mock.config import get_active_config, ServiceType
+    SERVICES, DEPENDENCY_GRAPH = get_active_config()
 
     graph = TopologyGraph()
 

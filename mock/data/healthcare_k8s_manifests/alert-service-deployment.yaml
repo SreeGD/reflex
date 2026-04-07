@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: alert-service
+  name: alert-service
+  namespace: medflow-prod
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: alert-service
+  template:
+    metadata:
+      labels:
+        app: alert-service
+    spec:
+      containers:
+      - env:
+        - name: PATIENT_SERVICE_URL
+          value: http://patient-service:9083
+        - name: PAGERDUTY_API_URL
+          value: https://events.pagerduty.com/v2
+        - name: PAGERDUTY_ROUTING_KEY_REF
+          value: alert-service-pagerduty-key
+        - name: VOCERA_API_URL
+          value: https://vocera.medflow.internal/api/v1
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          value: medflow-kafka.medflow-prod.svc.cluster.local:9092
+        - name: KAFKA_TOPIC_CLINICAL_ALERTS
+          value: clinical-alerts
+        - name: LOG_LEVEL
+          value: info
+        envFrom:
+        - configMapRef:
+            name: alert-service-config
+        image: medflow/alert-service:1.5.0
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 9085
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        name: alert-service
+        ports:
+        - containerPort: 9085
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 9085
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        resources:
+          limits:
+            cpu: 200m
+            memory: 128Mi
+          requests:
+            cpu: 50m
+            memory: 64Mi

@@ -7,11 +7,30 @@ from typing import Any, Dict, List
 from backend.app.topology.graph import TopologyGraph
 
 # User journey definitions: name -> ordered list of services in the call path
-USER_JOURNEYS = {
+_SHOPFAST_JOURNEYS = {
     "checkout": ["api-gateway", "order-service", "payment-service", "inventory-service", "notification-service"],
     "browse_catalog": ["api-gateway", "catalog-service", "inventory-service"],
     "add_to_cart": ["api-gateway", "cart-service", "catalog-service"],
 }
+
+_HEALTHCARE_JOURNEYS = {
+    "patient_admission": ["ehr-gateway", "patient-service", "billing-service", "pharmacy-service", "alert-service"],
+    "medication_order": ["ehr-gateway", "medication-service", "pharmacy-service"],
+    "appointment_booking": ["ehr-gateway", "scheduling-service", "medication-service"],
+}
+
+
+def _get_user_journeys():
+    try:
+        from mock.config import get_active_system
+        if get_active_system() == "healthcare":
+            return _HEALTHCARE_JOURNEYS
+    except Exception:
+        pass
+    return _SHOPFAST_JOURNEYS
+
+
+USER_JOURNEYS = _get_user_journeys()
 
 
 def get_affected_services(graph: TopologyGraph, service: str) -> Dict[str, List[str]]:

@@ -28,13 +28,8 @@ def _get_scenario_map() -> Dict[tuple, str]:
     if _SCENARIO_MAP is not None:
         return _SCENARIO_MAP
 
-    scenarios = {
-        "db_pool_exhaustion": "mock.scenarios.db_pool_exhaustion",
-        "payment_timeout_cascade": "mock.scenarios.payment_timeout_cascade",
-        "memory_leak": "mock.scenarios.memory_leak",
-        "redis_connection_storm": "mock.scenarios.redis_connection_storm",
-        "slow_query_cascade": "mock.scenarios.slow_query_cascade",
-    }
+    from mock.config import get_active_scenarios
+    scenarios, _ = get_active_scenarios()
 
     _SCENARIO_MAP = {}
     for name, module_path in scenarios.items():
@@ -68,7 +63,10 @@ def _match_scenario(alarm: Dict[str, Any]) -> str:
     if match:
         return match
 
-    return "db_pool_exhaustion"  # Default fallback
+    # Default to first scenario in active system
+    from mock.config import get_active_scenarios
+    scenarios, _ = get_active_scenarios()
+    return next(iter(scenarios.keys()), "db_pool_exhaustion")
 
 
 def _get_llm():

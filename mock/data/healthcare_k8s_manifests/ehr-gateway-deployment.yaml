@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: ehr-gateway
+  name: ehr-gateway
+  namespace: medflow-prod
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: ehr-gateway
+  template:
+    metadata:
+      labels:
+        app: ehr-gateway
+    spec:
+      containers:
+      - env:
+        - name: PATIENT_SERVICE_URL
+          value: http://patient-service:9083
+        - name: MEDICATION_SERVICE_URL
+          value: http://medication-service:9081
+        - name: SCHEDULING_SERVICE_URL
+          value: http://scheduling-service:9082
+        - name: BILLING_SERVICE_URL
+          value: http://billing-service:9084
+        - name: ALERT_SERVICE_URL
+          value: http://alert-service:9085
+        - name: REDIS_HOST
+          value: redis-sessions.medflow-prod.svc.cluster.local
+        - name: FHIR_BASE_URL
+          value: http://ehr-gateway:9080/fhir/r4
+        - name: HL7_VERSION
+          value: FHIR_R4
+        - name: SMART_ON_FHIR_ENABLED
+          value: 'true'
+        - name: OAUTH2_ISSUER_URL
+          value: https://auth.medflow.com/realms/medflow
+        - name: LOG_LEVEL
+          value: info
+        envFrom:
+        - configMapRef:
+            name: ehr-gateway-config
+        image: medflow/ehr-gateway:3.2.0
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 9080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        name: ehr-gateway
+        ports:
+        - containerPort: 9080
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 9080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 1024Mi
+          requests:
+            cpu: 300m
+            memory: 512Mi

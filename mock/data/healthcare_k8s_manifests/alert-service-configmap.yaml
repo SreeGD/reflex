@@ -1,0 +1,10 @@
+apiVersion: v1
+data:
+  alert_deduplication_window_seconds: '300'
+  alert_escalation_timeout_minutes: '5'
+  critical_alert_sms_enabled: 'true'
+  nurse_call_integration_enabled: 'true'
+kind: ConfigMap
+metadata:
+  name: alert-service-config
+  namespace: medflow-prod

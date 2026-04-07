@@ -1,0 +1,10 @@
+apiVersion: v1
+data:
+  appointment_slot_duration_minutes: '15'
+  bed_management_refresh_seconds: '30'
+  checkin_kiosk_timeout_seconds: '120'
+  max_advance_booking_days: '90'
+kind: ConfigMap
+metadata:
+  name: scheduling-service-config
+  namespace: medflow-prod

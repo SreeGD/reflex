@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: alert-service
+  namespace: medflow-prod
+spec:
+  ports:
+  - port: 9085
+    protocol: TCP
+    targetPort: 9085
+  selector:
+    app: alert-service
+  type: ClusterIP

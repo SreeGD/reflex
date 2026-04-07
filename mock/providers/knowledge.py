@@ -15,11 +15,22 @@ from pathlib import Path
 _DATA_DIR = Path(__file__).parent.parent / "data"
 
 
+def _get_data_dir() -> Path:
+    """Return the data directory for the active mock system."""
+    from mock.config import get_active_system
+    system = get_active_system()
+    if system == "healthcare":
+        healthcare_dir = Path(__file__).parent.parent / "data" / "healthcare"
+        if healthcare_dir.exists():
+            return healthcare_dir
+    return _DATA_DIR
+
+
 class MockKnowledgeProvider:
     """Fulfills KnowledgeProvider protocol using local files + keyword search."""
 
     def __init__(self, data_dir: Optional[Path] = None) -> None:
-        self._data_dir = data_dir or _DATA_DIR
+        self._data_dir = data_dir or _get_data_dir()
         self._runbooks: dict[str, str] = {}
         self._tickets: list[dict] = []
         self._confluence: dict[str, str] = {}
@@ -82,7 +93,7 @@ class MockKnowledgeProvider:
                         "source_type": "jira",
                         "source_id": ticket["key"],
                         "title": ticket.get("summary", ""),
-                        "content": ticket.get("resolution_notes", "")[:500],
+                        "content": (ticket.get("resolution_notes") or "")[:500],
                         "score": score,
                         "metadata": {
                             "status": ticket.get("status"),

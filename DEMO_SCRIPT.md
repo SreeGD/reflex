@@ -9,20 +9,20 @@
 > "It's 3 AM. Your phone buzzes. PagerDuty. Database connection pool exhausted on the patient-records service. The ER intake system is down. Nurses are writing on paper. What happens next?"
 
 **The reality today in healthcare IT:**
-- 53 minutes MTTR — that's 53 minutes where clinicians can't access patient records, medication histories, or allergy alerts
-- 8 manual steps: SSH, grep logs across 7 services, search Confluence for a runbook that was last updated 6 months ago, guess at root cause, restart the wrong service first, find the actual cause, apply fix, monitor for regression
-- The one engineer who knew the EHR integration fix? Left the company last month. Tribal knowledge gone.
-- This scenario plays out 3-5 times per week across health system IT teams
+- Nearly 50 minutes MTTR — Ponemon Institute reports an average of 49 minutes across enterprises. That's 49 minutes where clinicians can't access patient records, medication histories, or allergy alerts
+- 8 manual steps: check monitoring dashboards, open a ServiceNow ticket, page the on-call engineer, search Confluence for a runbook that's 6 months outdated, call the EHR vendor support line, identify root cause, apply fix, monitor for regression
+- The one engineer who knew the EHR integration fix? Left the company last month. Healthcare IT turnover runs 20-25% annually (HIMSS workforce data). Tribal knowledge gone.
+- This scenario plays out 1-3 times per week across health system IT teams
 
 **Why healthcare can't afford this:**
-- **Patient safety**: 53 minutes without medication reconciliation means potential drug interactions go unchecked
+- **Patient safety**: nearly 50 minutes without medication reconciliation means potential drug interactions go unchecked
 - **HIPAA audit risk**: manual incident response leaves gaps in audit trails — who touched what system, when, and why?
 - **Clinician burnout**: IT downtime = paper workarounds = nurses spending time on data entry instead of patients
-- **Revenue impact**: $6,500/minute in lost revenue for a mid-size health system during an EHR outage (HIMSS benchmark)
+- **Revenue impact**: Industry estimates range $5,000-$9,000/minute for healthcare system outages (Ponemon Institute) — plus patient safety costs that can't be measured in dollars
 - **Regulatory exposure**: CMS downtime reporting requirements, Joint Commission readiness — every untracked incident is a compliance risk
 
 **The industry problem:**
-- Gartner says average MTTR is 30-90 minutes across enterprises
+- Gartner says average MTTR is 30-90 minutes across enterprises, depending on severity and industry
 - 60-80% of alerts are noise — engineers develop alert fatigue, start ignoring pages
 - Knowledge silos: the fix exists in a runbook, but nobody can find it at 3 AM under pressure
 - Healthcare IT teams are smaller, on-call rotations thinner, and the stakes are literally life and death
@@ -146,37 +146,37 @@ Multi-turn context — it remembers what you already discussed. Ask a follow-up,
 
 | Metric | Manual Ops (Today) | With Pulse | Improvement |
 |--------|-------------------|------------|-------------|
-| **MTTR** | 53 minutes | <10 seconds | **99.7% reduction** |
+| **MTTR** | ~50 minutes | <10 seconds | **99.7% reduction** |
 | **Manual steps per incident** | 8 | 0 | **100% automated** |
 | **Engineer hours/week on incidents** | 15-20 hrs | <2 hrs | **90% reclaimed** |
 | **Knowledge retention on turnover** | 0% (tribal) | 100% (vector DB) | **Permanent** |
-| **Alert noise reaching humans** | 100 alerts/day | 3 real incidents | **97% noise eliminated** |
+| **Alert noise reaching humans** | 100 alerts/day | 3 real incidents | **97% noise eliminated (projected)** |
 | **3 AM pages** | Every SEV-2 | Only high-risk | **80% fewer pages** |
-| **Time to onboard new on-call** | 2-3 months | Day 1 (AI assists) | **90% faster** |
+| **Time to onboard new on-call** | Weeks to months | Day 1 (AI assists) | **Dramatically faster** |
 | **Compliance audit prep** | 2 weeks/quarter | Automatic | **100% automated** |
 
 ### Healthcare-Specific Impact
 
 | Healthcare Metric | Before Pulse | With Pulse |
 |-------------------|-------------|------------|
-| **EHR downtime per incident** | 53 min | <1 min |
-| **Paper workaround events/year** | ~260 (5/week) | <52 (only high-risk) |
+| **EHR downtime per incident** | ~50 min | <1 min |
+| **Paper workaround events/year** | ~100-150 (1-3/week) | <52 (only high-risk) |
 | **HIPAA audit trail completeness** | Partial (manual notes) | 100% (automated logging) |
-| **Patient safety exposure window** | 53 min without med checks | <10 sec |
+| **Patient safety exposure window** | ~50 min without med checks | <10 sec |
 | **CMS downtime reporting gaps** | Common | Zero — every incident tracked |
-| **IT staff per 1000 beds** | Industry avg: 28 FTEs | Fewer needed — AI handles L1 |
+| **IT staff burden** | L1 incidents consume 15-20 hrs/week | AI handles L1 — staff focus on strategic work |
 
 ### Cost of Downtime — Healthcare Focus
-- **Healthcare system**: **$6,500/minute** during EHR outage (HIMSS benchmark)
-- **ER diversion cost**: **$1M+/incident** if downtime forces ambulance rerouting
-- **Regulatory fines**: **$100K-$2M** per HIPAA breach from inadequate incident documentation
-- **Clinician productivity**: **$150/hr** per nurse on paper workarounds during downtime
-- If Pulse saves 40 minutes per incident, 5 incidents/week = **$1.3M/week in avoided downtime + compliance risk**
+- **Healthcare system outage**: **$5,000-$9,000/minute** (Ponemon Institute) — healthcare on the higher end due to patient safety liability
+- **ER diversion cost**: estimated **$500K-$1.5M/incident** if downtime forces ambulance rerouting (includes liability exposure)
+- **Regulatory fines**: **$100K-$2M** per HIPAA breach from inadequate incident documentation (HHS OCR published penalties)
+- **Clinician productivity**: **$100-$150/hr** fully loaded per nurse on paper workarounds during downtime (BLS data + overhead)
+- If Pulse saves 45 minutes per incident, 2 incidents/week = **$675K/week in avoided downtime + compliance risk**
 
 ### Beyond IT — Patient Outcomes
-- 53 minutes without medication reconciliation = **drug interaction risk**
-- 53 minutes without allergy alerts = **adverse event risk**
-- 53 minutes of ER paper intake = **delayed care, transcription errors**
+- ~50 minutes without medication reconciliation = **drug interaction risk**
+- ~50 minutes without allergy alerts = **adverse event risk**
+- ~50 minutes of ER paper intake = **delayed care, transcription errors**
 - Every minute of MTTR reduction is a minute clinicians spend with patients, not workarounds
 
 ### What's Built — Increment 1 (Complete)
@@ -221,7 +221,7 @@ Multi-turn context — it remembers what you already discussed. Ask a follow-up,
 - React frontend for production
 
 ### The Ask
-"Every minute of EHR downtime is a minute where a clinician can't check a drug interaction, a nurse is writing on paper, and a patient's care is delayed. We're turning 53-minute incidents into 10-second non-events. The platform is built, the architecture is proven, the demo is live. We need [your ask: pilot with a health system / engineering resources / partnership]."
+"Every minute of EHR downtime is a minute where a clinician can't check a drug interaction, a nurse is writing on paper, and a patient's care is delayed. We're turning 50-minute incidents into 10-second non-events. The platform is built, the architecture is proven, the demo is live. We need [your ask: pilot with a health system / engineering resources / partnership]."
 
 ---
 
@@ -252,13 +252,13 @@ Multi-turn context — it remembers what you already discussed. Ask a follow-up,
 > Yes. Each incident gets its own pipeline run. The incident store tracks all active incidents. The Review Agent's risk factors include "active incident count" — when the system is already stressed, it becomes more conservative (higher risk scores, more likely to escalate).
 
 **"What about cost? LLM calls are expensive."**
-> The pipeline makes 1-2 LLM calls per incident (RCA + optional critique). At Claude Sonnet pricing, that's roughly $0.01-0.03 per incident. Compare to 53 minutes of engineer time at $100/hr = $88 per incident manually. ROI is 3000x.
+> The pipeline makes 1-2 LLM calls per incident (RCA + optional critique). At Claude Sonnet pricing, that's roughly $0.01-0.03 per incident. Compare to ~50 minutes of engineer time at $100/hr = $83 per incident manually. ROI is nearly 3000x.
 
 **"Why not just use ChatGPT/Claude directly?"**
 > Raw LLMs don't have your runbooks, your incident history, your service topology, or your risk policies. They can't query your Prometheus or restart your pods. Pulse wraps the LLM in a structured pipeline with RAG, risk assessment, and provider-based infrastructure access. The LLM is one component — not the whole system.
 
 **"What about patient data / PHI exposure to LLMs?"**
-> Pulse operates at the infrastructure layer, not the data layer. It reads runbooks, service metrics, log patterns, and deployment configs — not patient records. The RAG knowledge base contains operational documentation, not PHI. No patient data ever reaches the LLM. For organizations requiring on-prem LLMs, the LLM provider pattern supports local models via sentence-transformers.
+> In the current architecture, Pulse operates at the infrastructure layer, not the data layer. It reads runbooks, service metrics, log patterns, and deployment configs — not patient records. The RAG knowledge base contains operational documentation, not PHI. No patient data ever reaches the LLM. For organizations requiring on-prem LLMs, the LLM provider pattern supports local models via sentence-transformers. Production deployment would require validation that log messages don't inadvertently contain PHI.
 
 **"How does this help with Joint Commission / CMS audits?"**
 > Three ways. First: every incident is automatically documented with root cause, evidence, confidence score, and resolution — no manual post-incident writeups. Second: the full action audit trail (who approved what, when, based on what evidence) is generated automatically in structured format. Third: the topology discovery and impact analysis provide a living architecture document that's always current — auditors see what's actually deployed, not what Confluence said 6 months ago.

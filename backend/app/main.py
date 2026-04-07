@@ -32,18 +32,14 @@ app.include_router(chat_router)
 app.include_router(topology_router)
 app.include_router(webhook_router)
 
-# Available demo scenarios
-SCENARIOS = {
-    "db_pool_exhaustion": "mock.scenarios.db_pool_exhaustion",
-    "payment_timeout_cascade": "mock.scenarios.payment_timeout_cascade",
-    "memory_leak": "mock.scenarios.memory_leak",
-    "redis_connection_storm": "mock.scenarios.redis_connection_storm",
-    "slow_query_cascade": "mock.scenarios.slow_query_cascade",
-}
+# Available demo scenarios — dynamically loaded from active system
+from mock.config import get_active_scenarios
+SCENARIOS, _SCENARIO_LABELS = get_active_scenarios()
 
 
 def _load_scenario(name: str):
-    mod = importlib.import_module(SCENARIOS[name])
+    scenarios, _ = get_active_scenarios()
+    mod = importlib.import_module(scenarios[name])
     return mod.create_scenario()
 
 
@@ -107,8 +103,9 @@ async def health():
 @app.get("/scenarios", response_model=List[ScenarioInfo])
 async def list_scenarios():
     """List available demo scenarios."""
+    scenarios, _ = get_active_scenarios()
     results = []
-    for name in SCENARIOS:
+    for name in scenarios:
         s = _load_scenario(name)
         results.append(ScenarioInfo(
             name=name,
@@ -126,15 +123,17 @@ async def analyze_alarm(request: AlarmRequest):
     from backend.app.agents.graph import build_graph
     from backend.app.providers.factory import create_providers
 
+    scenarios, _ = get_active_scenarios()
     if request.scenario:
-        if request.scenario not in SCENARIOS:
+        if request.scenario not in scenarios:
             raise HTTPException(404, f"Unknown scenario: {request.scenario}")
         scenario = _load_scenario(request.scenario)
         providers = create_providers(mode="mock", scenario=scenario)
         alarm = request.alarm or scenario.get_alert_payload()
     else:
-        # For now, default to db_pool_exhaustion mock
-        scenario = _load_scenario("db_pool_exhaustion")
+        # Default to first scenario in active system
+        default_name = next(iter(scenarios.keys()))
+        scenario = _load_scenario(default_name)
         providers = create_providers(mode="mock", scenario=scenario)
         alarm = request.alarm
 
@@ -155,7 +154,8 @@ async def analyze_alarm(request: AlarmRequest):
 @app.post("/scenarios/{scenario_name}/run", response_model=IncidentResponse)
 async def run_scenario(scenario_name: str):
     """Run a demo scenario end-to-end with its built-in alert payload."""
-    if scenario_name not in SCENARIOS:
+    scenarios, _ = get_active_scenarios()
+    if scenario_name not in scenarios:
         raise HTTPException(404, f"Unknown scenario: {scenario_name}")
 
     from backend.app.agents.graph import build_graph

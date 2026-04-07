@@ -11,7 +11,7 @@ import time
 import plotly.graph_objects as go
 import streamlit as st
 
-from mock.config import DEPENDENCY_GRAPH, SERVICES
+from mock.config import SERVICES, get_active_config
 
 # ---------------------------------------------------------------------------
 # Page config
@@ -53,19 +53,36 @@ def run_async(coro):
 # ---------------------------------------------------------------------------
 # Service dependency graph (Plotly)
 # ---------------------------------------------------------------------------
-def render_dependency_graph(affected_service: str | None = None):
-    positions = {
-        "api-gateway": (2, 4),
-        "catalog-service": (0, 2.5),
-        "cart-service": (1, 2.5),
-        "order-service": (3, 2.5),
-        "payment-service": (4, 1),
-        "inventory-service": (1.5, 1),
-        "notification-service": (3.5, 1),
-    }
+_SHOPFAST_POSITIONS = {
+    "api-gateway": (2, 4),
+    "catalog-service": (0, 2.5),
+    "cart-service": (1, 2.5),
+    "order-service": (3, 2.5),
+    "payment-service": (4, 1),
+    "inventory-service": (1.5, 1),
+    "notification-service": (3.5, 1),
+}
+
+_HEALTHCARE_POSITIONS = {
+    "ehr-gateway": (2, 4),
+    "medication-service": (0, 2.5),
+    "scheduling-service": (1, 2.5),
+    "patient-service": (3, 2.5),
+    "billing-service": (4, 1),
+    "pharmacy-service": (1.5, 1),
+    "alert-service": (3.5, 1),
+}
+
+_NODE_POSITIONS = _HEALTHCARE_POSITIONS if _ACTIVE_SYSTEM == "healthcare" else _SHOPFAST_POSITIONS
+
+
+def render_dependency_graph(affected_service=None):
+    from mock.config import get_active_config
+    _, dep_graph = get_active_config()
+    positions = _NODE_POSITIONS
 
     edge_x, edge_y = [], []
-    for src, targets in DEPENDENCY_GRAPH.items():
+    for src, targets in dep_graph.items():
         sx, sy = positions[src]
         for tgt in targets:
             tx, ty = positions[tgt]
@@ -79,9 +96,10 @@ def render_dependency_graph(affected_service: str | None = None):
         hoverinfo="none",
     ))
 
+    active_services, _ = get_active_config()
     node_x = [positions[s][0] for s in positions]
     node_y = [positions[s][1] for s in positions]
-    node_text = [SERVICES[s].display_name for s in positions]
+    node_text = [active_services[s].display_name if s in active_services else s for s in positions]
     node_colors = [
         "#FF4B4B" if s == affected_service else "#4B8BFF"
         for s in positions
@@ -504,15 +522,7 @@ def main():
             _topo_nodes = _topo.get("nodes", [])
             _topo_edges = _topo.get("edges", [])
 
-            positions = {
-                "api-gateway": (2, 4),
-                "catalog-service": (0, 2.5),
-                "cart-service": (1, 2.5),
-                "order-service": (3, 2.5),
-                "payment-service": (4, 1),
-                "inventory-service": (1.5, 1),
-                "notification-service": (3.5, 1),
-            }
+            positions = dict(_NODE_POSITIONS)
 
             health_colors = {"healthy": "#40C057", "degraded": "#FFA94D", "down": "#FF6B6B"}
             affected_service = scenario.get_affected_service()

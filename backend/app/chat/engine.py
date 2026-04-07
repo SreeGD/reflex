@@ -191,7 +191,10 @@ def create_chat_engine(
     from backend.app.providers.factory import create_providers
     import importlib
 
-    scenario_name = scenario_name or "db_pool_exhaustion"
+    if scenario_name is None:
+        from mock.config import get_active_scenarios
+        scenarios, _ = get_active_scenarios()
+        scenario_name = next(iter(scenarios.keys()))
     mod = importlib.import_module(f"mock.scenarios.{scenario_name}")
     scenario = mod.create_scenario()
     mock_providers = create_providers(mode="mock", scenario=scenario)

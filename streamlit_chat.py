@@ -107,11 +107,16 @@ SEVERITY_COLORS = {
 
 # --- UI ---
 
-st.title("🔧 Reflex Chat")
+import os as _os
+_CHAT_SYSTEM = _os.environ.get("MOCK_SYSTEM", "shopfast")
+_CHAT_TITLE = "🏥 MedFlow Chat" if _CHAT_SYSTEM == "healthcare" else "🔧 Pulse Chat"
+
+st.title(_CHAT_TITLE)
 st.caption(
     f"AI-powered incident management assistant | "
     f"Session: `{st.session_state.session_id}` | "
-    f"Mode: {'local' if LOCAL_MODE else 'remote'}"
+    f"Mode: {'local' if LOCAL_MODE else 'remote'} | "
+    f"System: {_CHAT_SYSTEM}"
 )
 
 # Display message history
